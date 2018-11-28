@@ -32,13 +32,49 @@ if not os.path.exists(res_folder):
 
 n_trials = 1 # per condition
 n_cols = [2,3,4,6,8]
-distances = [5,10,25,50,100]
 
+#sizes = 5*np.arange(2,80,dtype='float')
+#prob = (sizes/np.min(sizes)) **-1.5
+#imSize = np.array([800,800])
+
+#Sizes chosen for horizontal:
+#3 0.8972123464097765
+#8 0.7475256304569095
+#24 0.4925513111748433
+#68 0.2491748800639651
+#146 0.09892203196770742
+#Sizes chosen for diagonal:
+#2 0.8675302830216124
+#5 0.7058433239505979
+#11 0.48098719795795203
+#28 0.24386559658864032
+#62 0.09915052609944638
+#distances = [3,8,24,68,146]
+#distancesd = [2,5,11,28,62]
+
+sizes = 5*np.arange(1,80,dtype='float')
+prob = (sizes/np.min(sizes)) **-1.5
+imSize = np.array([800,800])
+
+#Sizes chosen for horizontal:
+#2 0.8897441130089403
+#5 0.7454126020552115
+#19 0.49815449458047945
+#62 0.24906879663087056
+#140 0.09888733852162014
+#Sizes chosen for diagonal:
+#1 0.8912648809369313
+#3 0.7132471428644057
+#8 0.47627923219339785
+#23 0.2460755676513367
+#56 0.0992763294998463
+distances = [2,5,19,62,140]
+distancesd = [1,3,8,23,56]
 core.checkPygletDuringWait = True
 
 #Setup for Screen and 
 # Create the window object.
-window = visual.Window(fullscr=True,monitor='Experiment1',units='pix',wintype='pyglet',size=[1000,1000])
+window = visual.Window(fullscr=True,monitor='Experiment1',units='pix',wintype='pyglet',screen=0)
 clock = window.frameClock
 event.clearEvents()
 #
@@ -51,9 +87,6 @@ event.clearEvents()
 #core.wait(1,1)
     
 
-sizes = 5*np.arange(1,80,dtype='float')
-prob = (sizes/np.min(sizes)) **-1.5
-imSize = np.array([800,800])
 
 
 
@@ -62,13 +95,14 @@ def Trial(window,clock,num_colors=8,positions=[]):
     positions_im = np.zeros_like(positions)
     positions_im[:,1] = np.floor(imSize/2)+positions[:,0]
     positions_im[:,0] = np.floor(imSize/2)-positions[:,1]-1
+    col = np.random.randint(num_colors)
     im = dl.gen_rect_leaf(imSize,
           sizes=sizes,
           prob = prob,
           grid=1,
           colors=np.linspace(0,1,num_colors),
           fixedIdx = positions_im,
-          fixedC=num_colors-1)
+          fixedC=col)
     now = datetime.datetime.now()
     im_name = now.strftime(im_folder+"image%Y_%m_%d_%H_%M_%S.png")
     im_pil = PIL.Image.fromarray(255*im[0]).convert('RGB')
@@ -92,29 +126,45 @@ def Trial(window,clock,num_colors=8,positions=[]):
     t2 = window.flip()
     #keypresses = event.getKeys(None,False,clock)
     same_object = im[2]
-    return im_name,rect_name,keypresses,same_object,(t0,t1,t2),positions,positions_im
+    return im_name,rect_name,keypresses,same_object,(t0,t1,t2),positions,positions_im,col
 
-def draw_pos_marker(window,pos):
-    l1 = visual.Line(window,start=pos+[-15.5,0.5],end=pos+[-3.5,0.5],lineColor='red', lineWidth=1)
-    l2 = visual.Line(window,start=pos+[ 15.5,0.5],end=pos+[ 3.5,0.5],lineColor='red', lineWidth=1)
-    l3 = visual.Line(window,start=pos+[0.5,-15.5],end=pos+[0.5,-3.5],lineColor='red', lineWidth=1)
-    l4 = visual.Line(window,start=pos+[0.5, 15.5],end=pos+[0.5, 3.5],lineColor='red', lineWidth=1)
+def draw_pos_marker(window,pos,lw=3):
+    l1 = visual.Line(window,start=pos+[-15.5,0.5],end=pos+[-3.5,0.5],lineColor='red', lineWidth=lw)
+    l2 = visual.Line(window,start=pos+[ 15.5,0.5],end=pos+[ 3.5,0.5],lineColor='red', lineWidth=lw)
+    l3 = visual.Line(window,start=pos+[0.5,-15.5],end=pos+[0.5,-3.5],lineColor='red', lineWidth=lw)
+    l4 = visual.Line(window,start=pos+[0.5, 15.5],end=pos+[0.5, 3.5],lineColor='red', lineWidth=lw)
     l1.draw(window)
     l2.draw(window)
     l3.draw(window)
     l4.draw(window)
     
-def draw_pos_marker_diagonal(window,pos):
-    l1 = visual.Line(window,start=pos-14.5,end=pos-2.5,lineColor='red', lineWidth=1)
-    l2 = visual.Line(window,start=pos+15.5,end=pos+3.5,lineColor='red', lineWidth=1)
-    l3 = visual.Line(window,start=pos+[15.5,-14.5],end=pos+[3.5,-2.5],lineColor='red', lineWidth=1)
-    l4 = visual.Line(window,start=pos+[-14.5,15.5],end=pos+[-2.5,3.5],lineColor='red', lineWidth=1)
+def draw_pos_marker_diagonal(window,pos,lw=3):
+    l1 = visual.Line(window,start=pos-14.5,end=pos-2.5,lineColor='red', lineWidth=lw)
+    l2 = visual.Line(window,start=pos+15.5,end=pos+3.5,lineColor='red', lineWidth=lw)
+    l3 = visual.Line(window,start=pos+[15.5,-14.5],end=pos+[3.5,-2.5],lineColor='red', lineWidth=lw)
+    l4 = visual.Line(window,start=pos+[-14.5,15.5],end=pos+[-2.5,3.5],lineColor='red', lineWidth=lw)
     l1.draw(window)
     l2.draw(window)
     l3.draw(window)
     l4.draw(window)
     
     
+    
+def run_movie(window,nCol,duration=5000,fperRect=1):
+    dl_mov=dl.dlMovie(imSize=imSize,
+          sizes=sizes,
+          prob = prob,
+          grid=1,
+          colors=np.linspace(0,1,nCol))
+    stim = visual.ImageStim(window)
+    for i in range(duration):
+        dl_mov.add_leaf()
+        im_pil = PIL.Image.fromarray(255*dl_mov.image).convert('RGB')
+        stim.setImage(im_pil)
+        stim.draw(window)
+        for j in range(fperRect-1):
+            window.flip(clearBuffer=False)
+        window.flip()
 #im = dl.gen_rect_leaf([1,1],
 #          sizes=sizes,
 #          prob = prob,
@@ -135,16 +185,34 @@ def draw_pos_marker_diagonal(window,pos):
 
 ## Main Experiment Script
 # results = [n_colours,distance,angle,abs_angle,truth,response]
-results = np.zeros((2*n_trials*len(n_cols)*len(distances),6))*np.nan
-mesh = np.meshgrid(n_cols,distances,[0,1])
+results = np.zeros((n_trials*len(n_cols)*(len(distances)+len(distancesd)),6))*np.nan
+mesh = np.meshgrid(n_cols,distances,0)
+meshd = np.meshgrid(n_cols,distancesd,1)
 
-results[:,0] = np.repeat(mesh[0].flatten(),n_trials)
-results[:,1] = np.repeat(mesh[1].flatten(),n_trials)
-results[:,2] = np.repeat(mesh[2].flatten(),n_trials)
-results[:,3] = np.random.randint(2,None,(2*n_trials*len(n_cols)*len(distances)))
+results[:,0] = np.append(np.repeat(mesh[0].flatten(),n_trials),np.repeat(meshd[0].flatten(),n_trials))
+results[:,1] = np.append(np.repeat(mesh[1].flatten(),n_trials),np.repeat(meshd[1].flatten(),n_trials))
+results[:,2] = np.append(np.repeat(mesh[2].flatten(),n_trials),np.repeat(meshd[2].flatten(),n_trials))
+results[:,3] = np.random.randint(2,None,(n_trials*len(n_cols)*(len(distances)+len(distancesd))))
 
 np.random.shuffle(results)
 resList = []
+
+# show movie of dead-leaf generation
+introText = visual.TextStim(window, text='Dear Participant,\n\n' +
+                            'Before we start with the main experiment we want to show you \n'+
+                            'how the images used in the experiment are generated.\n'+
+                            'We randomly choose rectangles and place them in random positions.\n'+
+                            'To illustrate this, we made a movie, which shows this process over time.\n\n'+
+                            '    Press any key to start the movie', 
+                            antialias=False)
+introText.wrapWidth=700
+introText.draw()
+window.flip()
+
+event.waitKeys()
+
+run_movie(window,10)
+
 
 # Display Introtext
 introText = visual.TextStim(window, text='Dear Participant,\n\n' +
@@ -154,7 +222,7 @@ introText = visual.TextStim(window, text='Dear Participant,\n\n' +
                             'if they do not press z.\n\n'+
                             'Only the first press counts and you will get 5 seconds for each image.\n\n'+
                             'The number of different colours will vary.\n'+
-                            'However the two points we ask about will always be white\n\n'+
+                            'However the two points we ask about will always be the same color.\n\n'+
                             '    Press any key to continue', 
                             antialias=False)
 introText.wrapWidth=700

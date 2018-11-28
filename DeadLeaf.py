@@ -6,6 +6,7 @@ Created on Wed Oct 10 10:03:12 2018
 """
 
 import numpy as np
+import scipy.signal as signal
 
 def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,fixedC=0,fixedIdx=[]):
     if prob is None:
@@ -134,9 +135,145 @@ def cartesian(arrays, out=None):
             out[j*m:(j+1)*m,1:] = out[0:m,1:]
     return out
 
-class node: 
-    def __init__(self,image):
-        node.image = image
-        node.children = None
-    def add_childrean(self):
-        pass
+   
+            
+class dlMovie:
+    def __init__(self,imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None):    
+        if prob is None:
+            self.prob = np.ones(len(sizes))
+        else:
+            self.prob = prob
+        assert (imSize[0] % grid) ==0,'Image Size not compatible with grid'
+        assert (imSize[1] % grid) ==0,'Image Size not compatible with grid'
+        assert np.all(np.array(sizes) % grid ==0),'Patch sizes not compatible with grid'
+        assert noise>=0, 'noise is the standard deviation and thus should be >=0'
+        assert np.all(self.prob>0), 'probabilities for shapes must be >0'
+        assert len(self.prob) == len(sizes), 'probabilities and sizes should have equal length'
+        self.imSize = imSize
+        self.sizes = np.array(sizes)
+        self.colors = colors
+        self.grid = grid
+        self.noise = noise
+        self.noiseType = noiseType
+        self.image = np.zeros(imSize,dtype='float')
+        self.rectList=np.zeros((0,5),dtype=np.int16)
+        # correction for the different size of the possible area
+        if len(np.array(sizes).shape) == 1:
+            probx = self.prob * (self.sizes+imSize[0])/(np.max(self.sizes)+imSize[0])
+            proby = self.prob * (self.sizes+imSize[1])/(np.max(self.sizes)+imSize[1])
+            probx = probx/np.sum(probx)
+            proby = proby/np.sum(proby)
+            self.probcx = probx.cumsum()
+            self.probcy = proby.cumsum()
+        else:
+            prob = prob * (sizes[:,0]+imSize[0])/(np.max(sizes[:,0])+imSize[0])
+            prob = prob * (sizes[:,1]+imSize[1])/(np.max(sizes[:,1])+imSize[1])
+            prob = prob/np.sum(prob)
+            self.probc = prob.cumsum()
+    def add_leaf(self):
+        if len(self.sizes.shape) == 1:
+            idx_sizex = np.searchsorted(self.probcx,np.random.rand())
+            idx_sizey = np.searchsorted(self.probcy,np.random.rand())
+            sizx = self.sizes[idx_sizex]
+            sizy = self.sizes[idx_sizey]
+        elif len(self.sizes.shape) == 2:
+            idx_size = np.searchsorted(self.probc,np.random.rand())
+            sizx = self.sizes[idx_size][0]
+            sizy = self.sizes[idx_size][1]
+        idx_color = np.random.randint(len(self.colors))
+        c = self.colors[idx_color]
+        sizx = sizx/self.grid
+        sizy = sizy/self.grid
+        idx_x = np.random.randint(1-sizx,self.imSize[0]/self.grid)
+        idx_y = np.random.randint(1-sizy,self.imSize[1]/self.grid)
+        self.rectList=np.append(self.rectList,[[self.grid*idx_x,self.grid*idx_y,self.grid*sizx,self.grid*sizy,idx_color]], axis=0)
+        self.image[int(self.grid*max(idx_x,0)):int(self.grid*max(0,idx_x+sizx)),int(self.grid*max(idx_y,0)):int(self.grid*max(0,idx_y+sizy))] = c
+    def get_image(self):
+        return self.image
+
+class node:
+    def __init__(self,rectList=None):
+        self.children = None
+        self.probChild = None
+        if rectList is None:
+            self.rectList=np.zeros((0,5),dtype=np.int16)
+        else:
+            self.rectList = rectList
+
+    def add_children(self,image,sizes,colors,prob):
+        self.children = list()
+        self.probChild = list()
+        kP = 0
+        for iSize in sizes:
+            rect = np.ones(iSize)
+            for iC in colors:
+                im = (image-iC)**2
+                im[np.isnan(im)]=0
+                imTest = signal.convolve2d(im,rect,'full')
+                im2 = ~np.isnan(image)
+                imTest2 = signal.convolve2d(im2,rect,'full')
+                locations = np.where(np.logical_and(imTest==0,imTest2!=0))
+                for t in np.array(locations).T:
+                    self.children.append(node(
+                            np.concatenate((self.rectList,[[t[0]-iSize[0]+1,t[1]-iSize[1]+1,iSize[0],iSize[1],iC]]),0)))
+                    self.probChild.append(prob[kP])
+            kP = kP+1
+    def get_sample_child(self,image,sizes,colors,prob):
+        # NOTE: This changes the image although it is not returned!
+        if self.children is None:
+            self.add_children(image,sizes,colors,prob)
+        pc = np.cumsum(self.probChild)
+        pc = pc/pc[-1]
+        ran = np.random.rand()
+        idx = np.argmax(ran<pc)
+        child = self.children[idx]
+        idx_x = child.rectList[-1,0]
+        idx_y = child.rectList[-1,1]
+        sizx = child.rectList[-1,2]
+        sizy = child.rectList[-1,3]
+        image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = np.nan
+        return child
+        
+class graph: 
+    def __init__(self,image,sizes,colors,prob):
+        self.image = np.array(image)
+        if prob is None:
+            self.prob = np.ones(len(sizes))
+        else:
+            self.prob = prob
+        imSize = self.image.shape
+        assert np.all(self.prob>0), 'probabilities for shapes must be >0'
+        assert len(self.prob) == len(sizes), 'probabilities and sizes should have equal length'
+        if len(np.array(sizes).shape) == 1:
+            self.sizes = np.reshape(np.concatenate(np.meshgrid(sizes,sizes),axis=0),[2,9]).transpose()
+            self.prob = np.outer(prob,prob).flatten()
+        else: 
+            self.sizes = np.array(sizes)
+        self.colors = colors
+        prob = self.prob * (self.sizes[:,0]+imSize[0])/(np.max(self.sizes[:,0])+imSize[0])
+        prob = self.prob * (self.sizes[:,1]+imSize[1])/(np.max(self.sizes[:,1])+imSize[1])
+        self.prob = prob/np.sum(prob)
+        self.probc = prob.cumsum()
+    def get_decomposition(self,points):
+        points = np.array(points)
+        n0 = node()
+        self.im = np.copy(self.image)
+        n = n0
+        all_contained = None
+        k = 0
+        while np.any(~np.isnan(self.im)):
+            n = n.get_sample_child(self.im,self.sizes,self.colors,self.prob)
+            k = k+1
+            print(k)
+            print(np.sum(~np.isnan(self.im)))
+            if all_contained is None:
+                if np.all(np.logical_and(
+                        np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(n.rectList[-1,0]+n.rectList[-1,2])),
+                        np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(n.rectList[-1,1]+n.rectList[-1,3])))):
+                    all_contained = True
+                elif np.any(np.logical_and(
+                        np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(n.rectList[-1,0]+n.rectList[-1,2])),
+                        np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(n.rectList[-1,1]+n.rectList[-1,3])))):
+                    all_contained = False
+        return (n.rectList,all_contained)
+        
