@@ -155,7 +155,7 @@ class dlMovie:
         self.grid = grid
         self.noise = noise
         self.noiseType = noiseType
-        self.image = np.zeros(imSize,dtype='float')
+        self.image = np.nan*np.zeros(imSize,dtype='float')
         self.rectList=np.zeros((0,5),dtype=np.int16)
         # correction for the different size of the possible area
         if len(np.array(sizes).shape) == 1:
@@ -235,7 +235,7 @@ class node:
         return child
         
 class graph: 
-    def __init__(self,image,sizes,colors,prob):
+    def __init__(self,image,sizes,colors,prob=None):
         self.image = np.array(image)
         if prob is None:
             self.prob = np.ones(len(sizes))
@@ -246,7 +246,7 @@ class graph:
         assert len(self.prob) == len(sizes), 'probabilities and sizes should have equal length'
         if len(np.array(sizes).shape) == 1:
             self.sizes = np.reshape(np.concatenate(np.meshgrid(sizes,sizes),axis=0),[2,9]).transpose()
-            self.prob = np.outer(prob,prob).flatten()
+            self.prob = np.outer(self.prob,self.prob).flatten()
         else: 
             self.sizes = np.array(sizes)
         self.colors = colors
@@ -254,8 +254,9 @@ class graph:
         prob = self.prob * (self.sizes[:,1]+imSize[1])/(np.max(self.sizes[:,1])+imSize[1])
         self.prob = prob/np.sum(prob)
         self.probc = prob.cumsum()
-    def get_decomposition(self,points):
-        points = np.array(points)
+    def get_decomposition(self,points=None):
+        if points is not None:
+            points = np.array(points)
         n0 = node()
         self.im = np.copy(self.image)
         n = n0
@@ -266,7 +267,7 @@ class graph:
             k = k+1
             print(k)
             print(np.sum(~np.isnan(self.im)))
-            if all_contained is None:
+            if all_contained is None and points is not None:
                 if np.all(np.logical_and(
                         np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(n.rectList[-1,0]+n.rectList[-1,2])),
                         np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(n.rectList[-1,1]+n.rectList[-1,3])))):

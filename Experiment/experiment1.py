@@ -30,7 +30,7 @@ if not os.path.exists(im_folder):
 if not os.path.exists(res_folder):
     os.mkdir(res_folder)
 
-n_trials = 1 # per condition
+n_trials = 10 # per condition
 n_cols = [2,3,4,6,8]
 
 #sizes = 5*np.arange(2,80,dtype='float')
@@ -54,7 +54,9 @@ n_cols = [2,3,4,6,8]
 
 sizes = 5*np.arange(1,80,dtype='float')
 prob = (sizes/np.min(sizes)) **-1.5
-imSize = np.array([800,800])
+imSize = np.array([400,400])
+factorSize = 2
+
 
 #Sizes chosen for horizontal:
 #2 0.8897441130089403
@@ -68,8 +70,8 @@ imSize = np.array([800,800])
 #8 0.47627923219339785
 #23 0.2460755676513367
 #56 0.0992763294998463
-distances = [2,5,19,62,140]
-distancesd = [1,3,8,23,56]
+distances = [5,19,62,140]
+distancesd = [3,8,23,56]
 core.checkPygletDuringWait = True
 
 #Setup for Screen and 
@@ -112,14 +114,17 @@ def Trial(window,clock,num_colors=8,positions=[]):
     same_object = False
     t0 = window.flip()
     CenterImage = visual.ImageStim(window)
+    im_pil = im_pil.resize(factorSize*np.array(imSize))
     CenterImage.setImage(im_pil)
     CenterImage.draw(window)
-    if len(positions)>0 and angle:
-        draw_pos_marker(window,positions[0])
-        draw_pos_marker(window,positions[1])
-    elif len(positions)>0 and not angle:
-        draw_pos_marker_diagonal(window,positions[0])
-        draw_pos_marker_diagonal(window,positions[1])
+#    if len(positions)>0 and angle:
+#        draw_pos_marker(window,positions[0])
+#        draw_pos_marker(window,positions[1])
+#    elif len(positions)>0 and not angle:
+#        draw_pos_marker_diagonal(window,positions[0])
+#        draw_pos_marker_diagonal(window,positions[1])
+    draw_pos_marker_dot(window,factorSize*positions[0])
+    draw_pos_marker_dot(window,factorSize*positions[1])
     t1 = window.flip()
     #core.wait(5,5)
     keypresses = event.waitKeys(maxWait=5,timeStamped=clock)
@@ -148,9 +153,15 @@ def draw_pos_marker_diagonal(window,pos,lw=3):
     l3.draw(window)
     l4.draw(window)
     
+
+
+def draw_pos_marker_dot(window,pos,lw=5):
+    #p = visual.Circle(window, radius=lw,pos = pos,lineColor='red')
+    #p = visual.Line(window,start=pos,end=pos,lineColor='red', lineWidth=lw)
+    p = visual.Rect(window,pos = pos+np.array([0.5,0.5]),width=lw,height=lw,fillColor='red',lineColor='red',lineWidth=0)
+    p.draw(window)
     
-    
-def run_movie(window,nCol,duration=5000,fperRect=1):
+def run_movie(window,nCol,duration=1500,fperRect=1):
     dl_mov=dl.dlMovie(imSize=imSize,
           sizes=sizes,
           prob = prob,
@@ -159,7 +170,13 @@ def run_movie(window,nCol,duration=5000,fperRect=1):
     stim = visual.ImageStim(window)
     for i in range(duration):
         dl_mov.add_leaf()
-        im_pil = PIL.Image.fromarray(255*dl_mov.image).convert('RGB')
+        im = np.repeat([dl_mov.image],3,axis=0)
+        im[2,np.isnan(im[0])]= 1
+        im[1,np.isnan(im[0])]= 0
+        im[0,np.isnan(im[0])]= 0
+        im = np.uint8(255*im.transpose((1,2,0)))
+        im_pil = PIL.Image.fromarray(im) #.convert('RGB')
+        im_pil = im_pil.resize(factorSize*np.array(imSize))
         stim.setImage(im_pil)
         stim.draw(window)
         for j in range(fperRect-1):
@@ -196,6 +213,15 @@ results[:,3] = np.random.randint(2,None,(n_trials*len(n_cols)*(len(distances)+le
 
 np.random.shuffle(results)
 resList = []
+
+
+
+pauseText = visual.TextStim(window, text='Dear Participant,\n\n' +
+                    'You may now take a break\n' +
+                    'Whenever you want to continue:\n\n'+
+                    '    Press any key to continue', 
+                    antialias=False)
+pauseText.wrapWidth=700
 
 # show movie of dead-leaf generation
 introText = visual.TextStim(window, text='Dear Participant,\n\n' +
@@ -264,6 +290,11 @@ for i in range(len(results)):
     else:
         results[i,4] =-1
     print(results[i])
+    if (i % 100 == 99):
+        pauseText.draw()
+        window.flip()
+        event.waitKeys()
+
 
 
 now = datetime.datetime.now()
