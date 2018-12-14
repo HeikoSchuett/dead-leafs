@@ -7,7 +7,7 @@ Created on Tue Nov  6 11:58:28 2018
 """
 
 
-from psychopy import visual,core,event
+from psychopy import visual,core,event,monitors
 import numpy as np
 import PIL
 import pickle
@@ -22,15 +22,22 @@ sys.path.pop(-1)
 
 import datetime
 
+monitors.monitorFolder= '/Users/heiko/.psychopy3/monitors'
+
 im_folder = './images/'
-res_folder = './results/'
+
+name = input("What is your subject code?")
+
+res_folder = './results/%s/' % name
+
+n_trials=input('How many trials per condition do you want to do today?')
 
 if not os.path.exists(im_folder):
     os.mkdir(im_folder)
 if not os.path.exists(res_folder):
     os.mkdir(res_folder)
 
-n_trials = 10 # per condition
+n_trials = int(n_trials) # per condition
 n_cols = [2,3,4,6,8]
 
 #sizes = 5*np.arange(2,80,dtype='float')
@@ -106,10 +113,10 @@ def Trial(window,clock,num_colors=8,positions=[]):
           fixedIdx = positions_im,
           fixedC=col)
     now = datetime.datetime.now()
-    im_name = now.strftime(im_folder+"image%Y_%m_%d_%H_%M_%S.png")
+    im_name = now.strftime(im_folder+"image%Y_%m_%d_%H_%M_%S_%f.png")
     im_pil = PIL.Image.fromarray(255*im[0]).convert('RGB')
     im_pil.save(im_name,'PNG')
-    rect_name = now.strftime(im_folder+"rect%Y_%m_%d_%H_%M_%S.npy")
+    rect_name = now.strftime(im_folder+"rect%Y_%m_%d_%H_%M_%S_%f.npy")
     np.save(rect_name,im[1])
     same_object = False
     t0 = window.flip()
@@ -272,7 +279,6 @@ for i in range(len(results)):
         pos = [[0,-distance/2],[0,distance/2]]
     pos = np.floor(np.array(pos))
     resList.append(Trial(window,clock,num_colors=n_c,positions=pos))
-    results[i,2] = resList[i][3]
     if not (resList[i][2] is None):
       if len(resList[i][2])>0:
         if resList[i][2][0][0]=='z':
