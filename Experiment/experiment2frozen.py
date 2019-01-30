@@ -111,7 +111,7 @@ event.clearEvents()
 def Trial(window,clock,distance=5,num_colors=9,border=False,angle=0,abs_angle=0,exponent=3,imageNumber=0): 
     im_name = im_folder + 'image%d_%d_%d_%d_%d_%d_%d.png' % (exponent,num_colors,distance,angle,abs_angle,imageNumber,int(border))
     image = PIL.Image.open(im_name)
-    rect_name = im_folder + 'rect%d_%d_%d_%d_%d_%d_%d.png' % (exponent,num_colors,distance,angle,abs_angle,imageNumber,int(border))
+    rect_name = im_folder + 'rect%d_%d_%d_%d_%d_%d_%d.npy' % (exponent,num_colors,distance,angle,abs_angle,imageNumber,int(border))
     t0 = window.flip()
     CenterImage = visual.ImageStim(window)
     im_pil = image.resize(factorSize*np.array(imSize))
@@ -227,7 +227,7 @@ introText.wrapWidth=700
 readyText = visual.TextStim(window, text='Dear Participant,\n\n' +
                             'Whenever you are ready press a button and the experiment starts.\n\n'+
                             'As a reminder:\n'+
-                            'If the two dots fall on the same rectangle, press m,=\n'+
+                            'If the two dots fall on the same rectangle, press m,\n'+
                             'If they do not press z.\n\n'+
                             'Only the first press counts and you will see every image for up to 5 seconds.\n\n'+
                             'The two points we ask about will always be the same color.\n'+
@@ -238,7 +238,7 @@ readyText = visual.TextStim(window, text='Dear Participant,\n\n' +
 
 
 
-resultsAll = np.zeros((0,8))
+resultsAll = np.zeros((0,9))
 # results = [exponent,n_colours,distance,angle,abs_angle,imageNumber,truth,response]
 
 introText.draw()
@@ -246,14 +246,15 @@ window.flip()
 
 event.waitKeys()
 
+resList = []
 ## Main Experiment Script
 for iBlock in range(len(exponents)):
     exponent = exponents[iBlock] 
 
-    # results = [exponent,n_colours,distance,angle,abs_angle,imageNumber,truth,response]
+    # results = [exponent,n_colours,distance,angle,abs_angle,imageNumber,truth,response,truthReduced]
     imageNumber = np.arange(n_trials) + offset_image_number
     
-    results = np.zeros((n_trials*len(n_cols)*(len(distances)+len(distancesd))*2,8))*np.nan
+    results = np.zeros((n_trials*len(n_cols)*(len(distances)+len(distancesd))*2,9))*np.nan
     mesh = np.meshgrid(exponent,n_cols,distances,0,[0,1],imageNumber)
     meshd = np.meshgrid(exponent,n_cols,distancesd,1,[0,1],imageNumber)
 
@@ -265,7 +266,6 @@ for iBlock in range(len(exponents)):
     results[:,5] = np.append(mesh[5].flatten(),meshd[5].flatten())
 
     np.random.shuffle(results)
-    resList = []
     
     movieText.draw()
     window.flip()
@@ -298,14 +298,17 @@ for iBlock in range(len(exponents)):
                 results[i,7] = 0
         else:
             results[i,7] = 0
+            
         if resList[i][3]:
             results[i,6] = 1
         else:
-            results[i,8] =-1
+            results[i,6] =-1
+            
         if resList[i][6]:
             results[i,8] = 1
         else:
             results[i,8] =-1
+            
         print(results[i])
         if (i % 100 == 99):
             pauseText.draw()
@@ -317,7 +320,7 @@ for iBlock in range(len(exponents)):
 
 
 now = datetime.datetime.now()
-np.save(now.strftime(res_folder+'result%Y_%m_%d_%H_%M_%S.npy'),results)
+np.save(now.strftime(res_folder+'result%Y_%m_%d_%H_%M_%S.npy'),resultsAll)
 with open(now.strftime(res_folder+'resList%Y_%m_%d_%H_%M_%S.pickle'), 'wb+') as f:
     pickle.dump(resList,f)
 core.wait(3,3)
