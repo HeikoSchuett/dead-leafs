@@ -22,7 +22,9 @@ imagesFolder = 'imagesFrozen'
 
 files = os.listdir(imagesFolder)
 rectFiles = [f for f in files if f[0:4]=='rect']
+rectFiles.sort()
 imageFiles = [f for f in files if f[0:4]=='imag']
+imageFiles.sort()
 
 imSize = np.array([300,300]);
 
@@ -128,19 +130,19 @@ for iFile in tqdm.trange(len(rectFiles),position=0):
     np.save(imagesFolder+'/visible'+rectFiles[iFile],rectsNew)
     image = -np.ones(imSize)
     rectList2 = list([])
-    for iRect in range(rectsOriginal.shape[0]):
-        entry = rectsOriginal[rectsOriginal.shape[0]-iRect-1]
+    for iRect in range(rectsNew.shape[0]):
+        entry = rectsNew[rectsNew.shape[0]-iRect-1]
         if np.any(image[int(max(entry[0],0)):int(max(0,entry[0]+entry[2])),
                         int(max(entry[1],0)):int(max(0,entry[1]+entry[3]))]!=entry[4]):
             rectList2.append(entry)
             image[int(max(entry[0],0)):int(max(0,entry[0]+entry[2])),
                   int(max(entry[1],0)):int(max(0,entry[1]+entry[3]))] = entry[4]
     rectList2.reverse()
-    rectsNew = np.array(rectList2)
-    np.save(imagesFolder+'/visible2'+rectFiles[iFile],rectsNew)
+    rectsNew2 = np.array(rectList2)
+    np.save(imagesFolder+'/visible2'+rectFiles[iFile],rectsNew2)
     same = np.load(imagesFolder+'/same'+rectFiles[iFile][4:])
     
-    fname = rectFiles[0].split('_')
+    fname = rectFiles[iFile].split('_')
     distance = int(fname[2])
     angle = int(fname[3])
     abs_angle = int(fname[4])
@@ -160,5 +162,11 @@ for iFile in tqdm.trange(len(rectFiles),position=0):
     positions_im[:,1] = np.floor(imSize/2)+positions[:,0]
     positions_im[:,0] = np.floor(imSize/2)-positions[:,1]-1
     
-    same = np.array([same[0],same[1],dl.test_positions(rectsNew,positions)])
+    sameOriginal = dl.test_positions(rectsOriginal,positions_im)
+    same1 = dl.test_positions(rectsNew,positions_im)
+    if sameOriginal != same1:
+        print('SOMETHING WENT WRONG!\n Processing changed truth!')
+    if sameOriginal != same[0]:
+        print('SOMETHING WENT WRONG!\n Saved result is not the one calculated now!')
+    same = np.concatenate((np.array([same[0],same[1],dl.test_positions(rectsNew2,positions_im)]),same[2:]))
     same = np.save(imagesFolder+'/same'+rectFiles[iFile][4:],same)

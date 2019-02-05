@@ -64,6 +64,10 @@ for i in range(Nimages):
                     image,rects,positions_im,same,col = dl.generate_image(
                             exponent,0,idist,iangle,iabs_angle,
                             imSize=imSize,sizes=sizes,num_colors=num_colors)
+                    # check internal consistency
+                    same_calculated = dl.test_positions(rects,positions_im)
+                    if same_calculated != same:
+                        raise ValueError('Same calculation is internally inconsistent!')
                     for ix in range(1,xlen+1):
                         for ip in range(2):
                             image[np.uint(positions_im[ip,0]+ix),np.uint(positions_im[ip,1]+ix)] = [1,0,0]
@@ -76,7 +80,7 @@ for i in range(Nimages):
                     rect_name = im_folder+"rect%d_%d_%d_%d_%d_%d_%d.npy" % (exponent,num_colors,idist,iangle,iabs_angle,i,0)
                     np.save(rect_name,rects)
                     same_name = im_folder+"same%d_%d_%d_%d_%d_%d_%d.npy" % (exponent,num_colors,idist,iangle,iabs_angle,i,0)
-                    np.save(same_name,np.array([same,col]))
+                    np.save(same_name,np.array([same,col,positions_im[0,0],positions_im[0,1],positions_im[1,0],positions_im[1,1]]))
                     image = dl.generate_image_from_rects(imSize,rects,border=True)
                     for ix in range(1,xlen+1):
                         for ip in range(2):
@@ -90,6 +94,6 @@ for i in range(Nimages):
                     rect_name = im_folder+"rect%d_%d_%d_%d_%d_%d_%d.npy" % (exponent,num_colors,idist,iangle,iabs_angle,i,1)
                     np.save(rect_name,rects)
                     same_name = im_folder+"same%d_%d_%d_%d_%d_%d_%d.npy" % (exponent,num_colors,idist,iangle,iabs_angle,i,1)
-                    np.save(same_name,np.array([same,col]))
+                    np.save(same_name,np.array([same,col,positions_im[0,0],positions_im[0,1],positions_im[1,0],positions_im[1,1]]))
                     t.update(1)
 t.close()                       

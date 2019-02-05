@@ -216,7 +216,7 @@ introText = visual.TextStim(window, text='Dear Participant,\n\n' +
                             'Two points will be marked with red markers. Please report, whether you believe they fall on the same rectangle or not.\n\n'+
                             'If they fall on the same rectangle, press m.\n'+
                             'If they do not press z.\n\n'+
-                            'The image will be shown for a second.\n\n'+
+                            'The image will be shown for up to 5 seconds.\n\n'+
                             'The two points we ask about will always be the same color.\n\n'+
                             '    Press any key to continue', 
                             antialias=False)
@@ -285,26 +285,27 @@ for iBlock in range(len(exponents)):
         angle = results[i,3]
         abs_angle = results[i,4]
         imageNumber = results[i,5]
-        resList.append(Trial(window,clock,num_colors=n_c,distance=distance,border=border,exponent=exponent,angle=angle,abs_angle=abs_angle,imageNumber=imageNumber))
-        if not (resList[i][2] is None):
-          if len(resList[i][2])>0:
-            if resList[i][2][0][0]=='z':
+        resTrial = Trial(window,clock,num_colors=n_c,distance=distance,border=border,exponent=exponent,angle=angle,abs_angle=abs_angle,imageNumber=imageNumber)
+        resList.append(resTrial)
+        if not (resTrial[2] is None):
+          if len(resTrial[2])>0:
+            if resTrial[2][0][0]=='z':
                 results[i,7] = -1
-            elif resList[i][2][0][0]=='m':
+            elif resTrial[2][0][0]=='m':
                 results[i,7] = 1
-            elif resList[i][2][0][0]=='q':
+            elif resTrial[2][0][0]=='q':
                 break
             else:
                 results[i,7] = 0
         else:
             results[i,7] = 0
             
-        if resList[i][3]:
+        if resTrial[3]:
             results[i,6] = 1
         else:
             results[i,6] =-1
             
-        if resList[i][6]:
+        if resTrial[6]:
             results[i,8] = 1
         else:
             results[i,8] =-1
@@ -314,15 +315,21 @@ for iBlock in range(len(exponents)):
             pauseText.draw()
             window.flip()
             event.waitKeys()
-    if resList[i][2][0][0]=='q':
+    if resTrial[2][0][0]=='q':
         break
     resultsAll = np.append(resultsAll,results,axis=0)
 
 
 now = datetime.datetime.now()
-np.save(now.strftime(res_folder+'result%Y_%m_%d_%H_%M_%S.npy'),resultsAll)
-with open(now.strftime(res_folder+'resList%Y_%m_%d_%H_%M_%S.pickle'), 'wb+') as f:
-    pickle.dump(resList,f)
+if border:
+    np.save(now.strftime(res_folder+'resBorder%Y_%m_%d_%H_%M_%S.npy'),resultsAll)
+    with open(now.strftime(res_folder+'resBorderList%Y_%m_%d_%H_%M_%S.pickle'), 'wb+') as f:
+        pickle.dump(resList,f)
+
+else:
+    np.save(now.strftime(res_folder+'result%Y_%m_%d_%H_%M_%S.npy'),resultsAll)
+    with open(now.strftime(res_folder+'resList%Y_%m_%d_%H_%M_%S.pickle'), 'wb+') as f:
+        pickle.dump(resList,f)
 core.wait(3,3)
 window.close()
 
