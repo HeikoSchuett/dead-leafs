@@ -8,6 +8,17 @@ Created on Wed Oct 10 10:03:12 2018
 import numpy as np
 import scipy.signal as signal
 import tqdm
+import pandas as pd
+from skimage import io
+import os
+
+default_sizes = 5*np.arange(1,80,dtype='float')
+default_colors_1 = np.linspace(0,1,9)
+default_colors_255 = np.array([  0,  31,  63,  95, 127, 159, 191, 223, 255], dtype=np.uint8)
+
+def get_default_prob(exponent):
+    return (default_sizes/np.min(default_sizes)) ** -(exponent/2)
+
 
 def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,fixedC=0,fixedIdx=[],border=False):
     if prob is None:
@@ -156,6 +167,17 @@ def cartesian(arrays, out=None):
             out[j*m:(j+1)*m,1:] = out[0:m,1:]
     return out
 
+def fast_rect_conv(im,rect_size):
+    # always convolves along the first axis
+    imOut = np.zeros(np.array(im.shape)+(rect_size-1,0))
+    current = np.zeros(im.shape[1])
+    for iC in range(im.shape[0]+rect_size-1):
+        if iC<im.shape[0]:
+            current = current+im[iC]
+        if iC>=rect_size:
+            current = current-im[iC-rect_size]
+        imOut[iC] = current
+    return imOut
    
             
 class dlMovie:
@@ -234,27 +256,32 @@ class node:
         im2 = ~np.isnan(image)
         sizes = np.int32(sizes)
         for iSize in tqdm.tqdm(sizes):
-            recty = np.ones((iSize[0],1))
-            rectx = np.ones((1,iSize[1]))
             fieldSize = np.prod(image.shape+iSize-1)
-            # Try better convolution? -> only beginning and End needed?
-            imTest2 = signal.convolve2d(im2,rectx,'full')
-            imTest2 = signal.convolve2d(imTest2,recty,'full')
-            locationsInvisible = np.where(imTest2==0)
+            # Found better convolution with same result!
+            #recty = np.ones((iSize[0],1))
+            #rectx = np.ones((1,iSize[1]))
+            #imTest2 = signal.convolve2d(im2,rectx,'full')
+            #imTest2 = signal.convolve2d(imTest2,recty,'full')
+            imTest2 = fast_rect_conv(im2,iSize[0])
+            imTest2 = fast_rect_conv(imTest2.transpose(),iSize[1]).transpose()
+            locationsInvisible = np.where(imTest2<=20*np.finfo(np.float64).eps)
             for t in np.array(locationsInvisible).T:
                 self.probInvisibleChild.append(prob[kP]/fieldSize)
+            kC = 0
             for iC in colors:
                 im = (image-iC)**2
                 im[np.isnan(im)]=0
-                imTest = signal.convolve2d(im,rectx,'full')
-                imTest = signal.convolve2d(imTest,recty,'full')
-                locations = np.where(np.logical_and(imTest==0,imTest2!=0))
+                #imTest = signal.convolve2d(im,rectx,'full')
+                #imTest = signal.convolve2d(imTest,recty,'full')
+                imTest = fast_rect_conv(im,iSize[0])
+                imTest = fast_rect_conv(imTest.transpose(),iSize[1]).transpose()
+                locations = np.where(np.logical_and(imTest<=20*np.finfo(np.float64).eps,imTest2>=20*np.finfo(np.float64).eps))
                 for t in np.array(locations).T:
-                    self.children.append([t[0]-iSize[0]+1,t[1]-iSize[1]+1,iSize[0],iSize[1],iC,imTest2[t[0],t[1]]])
-                    self.probChild.append(prob[kP]/fieldSize)
+                    self.children.append([t[0]-iSize[0]+1,t[1]-iSize[1]+1,iSize[0],iSize[1],kC,imTest2[t[0],t[1]]])
+                    self.probChild.append(prob[kP]/fieldSize/len(colors))
+                kC = kC+1
             kP = kP+1
         self.probInvisible = np.sum(np.array(self.probInvisibleChild))
-        #print(self.probInvisible)
         self.probPossible = np.sum(np.array(self.probChild))
     def get_sample_child(self,image,sizes,colors,prob):
         # NOTE: This changes the image although it is not returned!
@@ -292,9 +319,26 @@ class node:
         image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = np.nan
         logpCorrection = np.log(p[idx]/self.probChild[idx])
         return (child,self.probPossible,self.probInvisible,logpCorrection)
+    def get_ML_child(self,image,sizes,colors,prob):
+        # NOTE: This changes the image although it is not returned!
+        if self.children is None:
+            self.add_children(image,sizes,colors,prob)
+        pCorrection = np.array(self.children)[:,5]+ np.log(self.probChild)
+        #pCorrection = pCorrection-np.max(pCorrection)
+        idx = np.argmax(pCorrection)
+        child = self.children[idx]
+        #print(self.children[idx])
+        idx_x = child[0]
+        idx_y = child[1]
+        sizx = child[2]
+        sizy = child[3]
+        image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = np.nan
+        logpCorrection = pCorrection[idx] - np.log(self.probChild[idx])
+        return (child,self.probPossible,self.probInvisible,logpCorrection)
+        
         
 class graph: 
-    def __init__(self,image,sizes,colors,prob=None):
+    def __init__(self,image,sizes=default_sizes,colors=default_colors_255,prob=None):
         self.image = np.array(image)
         if prob is None:
             self.prob = np.ones(len(sizes))
@@ -377,6 +421,40 @@ class graph:
                     all_contained = False
         logPCorrection = logPCorrection- rectList.shape[0]* np.log(len(self.colors))
         return (rectList,all_contained,logPPos,logPVis,logPCorrection)
+    def get_decomposition_max_explained(self,points = None):
+        logPPos = 0
+        logPVis = 0
+        logPCorrection = 0
+        rectList = np.zeros((0,6),dtype=np.int16)
+        if points is not None:
+            points = np.array(points)
+        n0 = node()
+        im = np.copy(self.image)
+        n = n0
+        all_contained = None
+        k = 0
+        while np.any(~np.isnan(im)):
+            n = node()
+            (rect,pPos,pInVis,correction) = n.get_ML_child(im,self.sizes,self.colors,self.prob)
+            logPPos = logPPos + np.log(pPos)
+            logPVis = logPVis + np.log(1-pInVis)
+            logPCorrection = logPCorrection-correction
+            k = k+1
+            rectList = np.append(rectList,[rect],axis=0)
+            print(k)
+            print(np.sum(~np.isnan(im)))
+            if all_contained is None and points is not None:
+                if np.all(np.logical_and(
+                        np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
+                        np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
+                    all_contained = True
+                elif np.any(np.logical_and(
+                        np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
+                        np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
+                    all_contained = False
+        logPCorrection = logPCorrection- rectList.shape[0]* np.log(len(self.colors))
+        return (rectList,all_contained,logPPos,logPVis,logPCorrection)
+        
   
 def generate_image(exponent,border,distance,angle,abs_angle,sizes,imSize=np.array([300,300]),num_colors=9):
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
@@ -419,7 +497,7 @@ def generate_image_from_rects(imSize,rectList,border=False,colors=None):
     image = np.zeros(imSize)
     for i in range(len(rectList)):
         image[int(max(rectList[len(rectList)-i-1,0],0)):int(max(0,rectList[len(rectList)-i-1,0]+rectList[len(rectList)-i-1,2])),
-              int(max(rectList[len(rectList)-i-1,1],0)):int(max(0,rectList[len(rectList)-i-1,1]+rectList[len(rectList)-i-1,3]))] = colors[rectList[len(rectList)-i-1,-1]]
+              int(max(rectList[len(rectList)-i-1,1],0)):int(max(0,rectList[len(rectList)-i-1,1]+rectList[len(rectList)-i-1,3]))] = colors[int(rectList[len(rectList)-i-1,4])]
         if border:
             idx_x = rectList[len(rectList)-i-1,0]
             idx_y = rectList[len(rectList)-i-1,1]
@@ -453,3 +531,103 @@ def test_positions(rectList,fixedIdx):
         if len(delete)>0:
             break
     return oneObject
+
+def show_frozen_image(im_folder='imagesFrozen/',exponent=1,num_colors=9,dist=40,angle=0,abs_angle=0,i=0,border=0):
+    import PIL
+    im_name = im_folder+"image%d_%d_%d_%d_%d_%d_%d.png" % (exponent,num_colors,dist,angle,abs_angle,i,border)
+    im = PIL.Image.open(im_name)
+    im.show()
+               
+
+def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
+                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57])):
+    # creates training images on the fly
+    images = np.zeros((N,imSize[0],imSize[1],3))
+    solution = np.zeros((N))
+    for i in range(N):
+        exponent = exponents[np.random.randint(len(exponents))]
+        angle = np.random.randint(2)
+        abs_angle = np.random.randint(2)
+        if angle:
+            distance = distancesd[np.random.randint(len(distancesd))]
+        else:
+            distance = distances[np.random.randint(len(distances))]
+        im = generate_image(exponent,0,distance,angle,abs_angle,sizes)
+        images[i] = im[0]
+        if im[3]:
+            solution[i] = 1
+        else:
+            solution[i] = 0
+    return images,solution     
+
+
+def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
+                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57])):
+    # saves training images into a folder
+    if not os.path.isdir(root_dir):
+        os.mkdir(root_dir)
+    solution_list = list()
+    exponent_list = list()
+    angle_list = list()
+    abs_angle_list = list()
+    distance_list = list()
+    im_name_list = list()
+    for i in tqdm.trange(N,smoothing=0):
+        exponent = exponents[np.random.randint(len(exponents))]
+        angle = np.random.randint(2)
+        abs_angle = np.random.randint(2)
+        if angle:
+            distance = distancesd[np.random.randint(len(distancesd))]
+        else:
+            distance = distances[np.random.randint(len(distances))]
+        im = generate_image(exponent,0,distance,angle,abs_angle,sizes)
+        image = im[0]
+        if im[3]:
+            solution_list.append(1)
+        else:
+            solution_list.append(0)
+        exponent_list.append(exponent)
+        angle_list.append(angle)
+        abs_angle_list.append(abs_angle)
+        distance_list.append(distance)
+        im_name = 'image%07d.png' % i
+        io.imsave(os.path.join(root_dir,im_name), image)
+        im_name_list.append(im_name)
+    df = pd.DataFrame({'im_name':im_name_list,'solution':solution_list,'exponent':exponent_list,'angle':angle_list,
+                       'abs_angle':abs_angle_list,'distance':distance_list})
+    df.to_csv(os.path.join(root_dir,'solution.csv'))
+    
+    
+def reduce_image(image,points=None,method='line'):
+    image = image.copy().astype(np.float)
+    if len(image.shape) == 3:
+        image[(image[:,:,0]==255) & (image[:,:,1]==0),:] = np.nan
+        image = np.mean(image,axis=2)
+    if points is None:
+        if np.any(np.isnan(image)):
+            all_idx = np.array(np.where(np.isnan(image)))
+            uni = np.unique(all_idx[0],return_index=True,return_counts=True)
+            points = all_idx[:,uni[1][uni[2]==1]].T
+            if points.size==0:
+                uni = np.unique(all_idx[1],return_index=True,return_counts=True)
+                points = all_idx[:,uni[1][uni[2]==1]].T
+        else:
+            raise ValueError('If the image is not marked you have to specify the querried points!')
+    assert np.all(points.shape == np.array([2,2]))
+    if method =='point':
+        image[points[:,0],points[:,1]] = True
+    elif method == 'line':
+        mask = np.zeros_like(image,dtype=np.bool)
+        if points[0,0] == points[1,0]: # only change in y direction
+            mask[points[0,0],np.arange(points[0,1],points[1,1])] = True
+        elif points[0,1] == points[1,1]: #only change in x direction
+            mask[np.arange(points[0,0],points[1,0]),points[0,1]] = True
+        elif points[0,1] < points[1,1]: #diagonal positive
+            mask[np.arange(points[0,0],points[1,0]),np.arange(points[0,1],points[1,1])] = True
+        elif points[0,1] > points[1,1]: #diagonal positive
+            mask[np.arange(points[0,0],points[1,0],-1),np.arange(points[0,1],points[1,1],-1)] = True
+    elif method == 'square':
+        mask = np.zeros_like(image,dtype=np.bool)
+        mask[np.min(points[:,0]):np.max(points[:,0]),np.min(points[:,1]):np.max(points[:,1])] = True
+    image[~mask] = np.nan
+    return image

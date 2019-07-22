@@ -18,6 +18,17 @@ distancesd = [4,7,14,28,57]
 dirs = os.listdir(folder)
 #dirs.remove('test')
 dirs.remove('.DS_Store')
+dirs.remove('Icon\r')
+k =0
+while k<len(dirs):
+    if 'train' in dirs[k]:
+        dirs.remove(dirs[k])
+    elif 'test' in dirs[k]:
+        dirs.remove(dirs[k])
+    else:
+        k = k + 1
+
+details=False
 
 for iDir in range(len(dirs)):
     d = np.zeros((0,9))
@@ -42,7 +53,6 @@ for iDir in range(len(dirs)):
     #pTrue = pTrue[[0,1,2,3,4,5,6,7,8,9]]
     #pSame = pSame[[0,1,2,3,4,5,6,7,8,9]]
     #pSameTrue = pSameTrue[[0,1,2,3,4,5,6,7,8,9]]
-    
     pTrue = np.reshape(pTrue,(5,2,5))
     pSame = np.reshape(pSame,(5,2,5))
     pSameTrue = np.reshape(pSameTrue,(5,2,5))
@@ -51,32 +61,33 @@ for iDir in range(len(dirs)):
     pSameTrue = np.flip(pSameTrue,axis=1)
     blindMax = np.maximum(pSameTrue,1-pSameTrue)
     matchingMaxx = pSameTrue**2+(1-pSameTrue)**2
-    for iExp in range(5):
-        fig = plt.figure(figsize=(15,5))
-        fig.suptitle(dirs[iDir]+':Exponent=%d'%(iExp+1))
-        
-        plt.subplot(1,3,1)
-        plt.plot(distances,np.squeeze(pSameTrue[:,0,iExp]),'k--',alpha=.5)
-        plt.plot(distancesd,np.squeeze(pSameTrue[:,1,iExp]),'k--',alpha=.5)
-        plt.plot(distances,np.squeeze(pSame[:,0,iExp]))
-        plt.plot(distancesd,np.squeeze(pSame[:,1,iExp]))
-        plt.ylabel('P(judged same)')
-        plt.xlabel('distance')
-        plt.ylim([0,1])
-        plt.subplot(1,3,2)
-        plt.plot(distances,np.squeeze(blindMax[:,0,iExp]),'k--',alpha=.5)
-        plt.plot(distances,np.squeeze(matchingMaxx[:,0,iExp]),'k:',alpha=.5)
-        plt.plot(distances,np.squeeze(pTrue[:,0,iExp]))
-        plt.ylabel('P(judged correctly)')
-        plt.xlabel('distance')
-        plt.ylim([0.5,1])
-        plt.subplot(1,3,3)
-        plt.plot(distancesd,np.squeeze(blindMax[:,1,iExp]),'k--',alpha=.5)
-        plt.plot(distancesd,np.squeeze(matchingMaxx[:,1,iExp]),'k:',alpha=.5)
-        plt.plot(distancesd,np.squeeze(pTrue[:,1,iExp]))
-        plt.ylim([0.5,1])
-        plt.ylabel('P(judged correctly)')
-        plt.xlabel('distance')
+    if details:
+        for iExp in range(5):
+            fig = plt.figure(figsize=(15,5))
+            fig.suptitle(dirs[iDir]+':Exponent=%d'%(iExp+1))
+            
+            plt.subplot(1,3,1)
+            plt.plot(distances,np.squeeze(pSameTrue[:,0,iExp]),'k--',alpha=.5)
+            plt.plot(distancesd,np.squeeze(pSameTrue[:,1,iExp]),'k--',alpha=.5)
+            plt.plot(distances,np.squeeze(pSame[:,0,iExp]))
+            plt.plot(distancesd,np.squeeze(pSame[:,1,iExp]))
+            plt.ylabel('P(judged same)')
+            plt.xlabel('distance')
+            plt.ylim([0,1])
+            plt.subplot(1,3,2)
+            plt.plot(distances,np.squeeze(blindMax[:,0,iExp]),'k--',alpha=.5)
+            plt.plot(distances,np.squeeze(matchingMaxx[:,0,iExp]),'k:',alpha=.5)
+            plt.plot(distances,np.squeeze(pTrue[:,0,iExp]))
+            plt.ylabel('P(judged correctly)')
+            plt.xlabel('distance')
+            plt.ylim([0.5,1])
+            plt.subplot(1,3,3)
+            plt.plot(distancesd,np.squeeze(blindMax[:,1,iExp]),'k--',alpha=.5)
+            plt.plot(distancesd,np.squeeze(matchingMaxx[:,1,iExp]),'k:',alpha=.5)
+            plt.plot(distancesd,np.squeeze(pTrue[:,1,iExp]))
+            plt.ylim([0.5,1])
+            plt.ylabel('P(judged correctly)')
+            plt.xlabel('distance')
     
     fig = plt.figure(figsize=(15,5))
     fig.suptitle(dirs[iDir])

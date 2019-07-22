@@ -81,7 +81,7 @@ for i in range(Nimages):
                     np.save(rect_name,rects)
                     same_name = im_folder+"same%d_%d_%d_%d_%d_%d_%d.npy" % (exponent,num_colors,idist,iangle,iabs_angle,i,0)
                     np.save(same_name,np.array([same,col,positions_im[0,0],positions_im[0,1],positions_im[1,0],positions_im[1,1]]))
-                    image = dl.generate_image_from_rects(imSize,rects,border=True)
+                    image = dl.generate_image_from_rects(imSize,rects,border=True,colors=np.linspace(0,1,num_colors))
                     for ix in range(1,xlen+1):
                         for ip in range(2):
                             image[np.uint(positions_im[ip,0]+ix),np.uint(positions_im[ip,1]+ix)] = [1,0,0]

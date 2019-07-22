@@ -152,7 +152,7 @@ def draw_pos_marker_dot(window,pos,lw=5):
     p = visual.Rect(window,pos = pos+np.array([0.5,0.5]),width=lw,height=lw,fillColor='red',lineColor='red',lineWidth=0)
     p.draw(window)
     
-def run_movie(window,nCol,duration=1500,fperRect=1,exponent = 3,border=False): 
+def run_movie(window,nCol,duration=500,fperRect=1,exponent = 3,border=False): 
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
     dl_mov=dl.dlMovie(imSize=imSize,
           sizes=sizes,
@@ -195,7 +195,7 @@ def run_movie(window,nCol,duration=1500,fperRect=1,exponent = 3,border=False):
 #core.wait(500,500)    
 
 pauseText = visual.TextStim(window, text='Dear Participant,\n\n' +
-                    'You may now take a break\n' +
+                    'You may now take a short break\n' +
                     'Whenever you want to continue:\n\n'+
                     '    Press any key to continue', 
                     antialias=False)
@@ -234,6 +234,7 @@ readyText = visual.TextStim(window, text='Dear Participant,\n\n' +
                             'We always draw rectangles until the square is filled.\n\n'+
                             '    Press any key to continue', 
                             antialias=False)
+readyText.wrapWidth=700
 
 
 
@@ -271,7 +272,7 @@ for iBlock in range(len(exponents)):
     window.flip()
     event.waitKeys()
 
-    run_movie(window,10,border=border,exponent=exponent)
+    run_movie(window,9,border=border,exponent=exponent)
 
     # Display Introtext
     readyText.draw()
@@ -312,6 +313,12 @@ for iBlock in range(len(exponents)):
             
         print(results[i])
         if (i % 100 == 99):
+            correct = np.sum(results[(i-99):(i+1),7] == results[(i-99):(i+1),6])
+            pauseText.text= ('Dear Participant,\n\n' +
+                    'You may now take a short break.\n' +
+                    'You answered correctly for %d of the last %d images.\n' +
+                    'Whenever you want to continue:\n\n'+
+                    '    Press any key to continue') % (correct,100)
             pauseText.draw()
             window.flip()
             event.waitKeys()

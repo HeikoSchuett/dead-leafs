@@ -10,6 +10,9 @@ import numpy as np
 import os
 import tqdm
 import time
+import PIL
+import scipy.ndimage as ndimage
+
 
 # This is the only way I found to do this. It looks like a HORRIBLE IDEA
 # but unfortunately it works so far.
@@ -170,3 +173,61 @@ for iFile in tqdm.trange(len(rectFiles),position=0):
         print('SOMETHING WENT WRONG!\n Saved result is not the one calculated now!')
     same = np.concatenate((np.array([same[0],same[1],dl.test_positions(rectsNew2,positions_im)]),same[2:]))
     same = np.save(imagesFolder+'/same'+rectFiles[iFile][4:],same)
+    
+
+### Actually extracting information from images!
+statistics = np.zeros((len(imageFiles),25))
+
+for iFile in tqdm.trange(len(imageFiles),position=0):
+    image = PIL.Image.open(imagesFolder+'/'+imageFiles[iFile])
+    fname = imageFiles[iFile].split('_')
+    n_c = int(fname[1])
+    distance = int(fname[2])
+    angle = int(fname[3])
+    abs_angle = int(fname[4])
+    imageNumber = int(fname[5])
+    border = int(fname[6][0])
+    exponent = int(fname[0][-1])
+    
+    same_name = imagesFolder+ '/' + "same%d_%d_%d_%d_%d_%d_%d.npy" % (exponent,n_c,distance,angle,abs_angle,imageNumber,0)               
+    same = np.load(same_name)
+    colPositions = int(same[1]/8*255)
+    
+    if angle and not abs_angle:
+        pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
+    elif angle and abs_angle:
+        pos = [[-distance/2,distance/2],[distance/2,-distance/2]]
+    elif not angle and not abs_angle:
+        pos = [[-distance/2,0],[distance/2,0]]
+    elif not angle and abs_angle: 
+        pos = [[0,-distance/2],[0,distance/2]]
+    pos = np.floor(np.array(pos))
+    
+    positions = pos
+    positions = np.floor(positions)
+    positions_im = np.zeros_like(positions)
+    positions_im[:,1] = np.floor(imSize/2)+positions[:,0]
+    positions_im[:,0] = np.floor(imSize/2)-positions[:,1]-1
+    
+    imArray = np.array(image)
+    ## extract line connecting the two points and the two connections along the cardinals
+    if positions_im[0,0]>positions_im[1,0]:
+        lineX = range(int(positions_im[0,0]),int(positions_im[1,0]-1),-1)
+    else:
+        lineX = range(int(positions_im[0,0]),int(positions_im[1,0]+1))
+    if positions_im[0,1]>positions_im[1,1]:
+        lineY = range(int(positions_im[0,1]),int(positions_im[1,1]-1),-1)
+    else:
+        lineY = range(int(positions_im[0,1]),int(positions_im[1,1]+1))
+    line = imArray[lineX,lineY,:]
+    lineNumOtherColor = np.sum(np.any(line != colPositions,axis=1))
+    lineUniqueColors = len(np.unique(line,axis=0))
+    statistics[iFile,0] = exponent
+    statistics[iFile,1] = n_c
+    statistics[iFile,2] = distance
+    statistics[iFile,3] = angle
+    statistics[iFile,4] = abs_angle
+    statistics[iFile,5] = imageNumber
+    statistics[iFile,6] = same[0]
+    statistics[iFile,7] = lineNumOtherColor
+    statistics[iFile,8] = lineUniqueColors
