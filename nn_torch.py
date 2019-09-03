@@ -166,6 +166,93 @@ class model_recurrent(nn.Module):
         self.apply(init_weights_layer_linear)
 
 
+
+
+def get_shifted_values(feat,neighbors):
+    out = []
+    for iNeigh in range(neighbors.shape[0]):
+        output = torch.zeros(feat.shape)
+        if neighbors[iNeigh,0]>= 0 and neighbors[iNeigh,1] >= 0:
+            output[:,:,:(feat.shape[2]-int(neighbors[iNeigh,0])),:(feat.shape[3]-int(neighbors[iNeigh,1]))] = feat[:,:,int(neighbors[iNeigh,0]):,int(neighbors[iNeigh,1]):]
+        elif neighbors[iNeigh,0]>= 0 and neighbors[iNeigh,1] < 0:
+            output[:,:,:(feat.shape[2]-int(neighbors[iNeigh,0])),int(-neighbors[iNeigh,1]):] = feat[:,:,int(neighbors[iNeigh,0]):,:(feat.shape[3]-int(-neighbors[iNeigh,1]))]
+        elif neighbors[iNeigh,0]< 0 and neighbors[iNeigh,1] >= 0:
+            output[:,:,int(-neighbors[iNeigh,0]):,:(feat.shape[3]-int(neighbors[iNeigh,1]))] = feat[:,:,:(feat.shape[2]-int(-neighbors[iNeigh,0])),int(neighbors[iNeigh,1]):]
+        elif neighbors[iNeigh,0]< 0 and neighbors[iNeigh,1] < 0:
+            output[:,:,int(-neighbors[iNeigh,0]):,int(-neighbors[iNeigh,1]):] = feat[:,:,:(feat.shape[2]-int(-neighbors[iNeigh,0])),:(feat.shape[3]-int(-neighbors[iNeigh,1]))]
+        out.append(output)
+    output = torch.cat(out,0).reshape(neighbors.shape[0],feat.shape[0],feat.shape[1],feat.shape[2],feat.shape[3])
+    return output  
+
+class model_pred_like(nn.Module):
+    def __init__(self,Nrep=5,neighbors=np.array([[0,-1],[0,1],[1,0],[-1,0]])):
+        super(model_pred_like, self).__init__()
+        self.neighbors = neighbors
+        self.norm = nn.InstanceNorm2d(3)
+        self.conv1value = nn.Conv2d(3, 10, kernel_size=5,stride=1,padding=(2,2))
+        self.conv1prec = nn.Conv2d(3, 10, kernel_size=5,stride=1,padding=(2,2))
+        self.conv1neigh = nn.Conv2d(3, 4, kernel_size=5,stride=1,padding=(2,2))
+        self.pool = nn.MaxPool2d(5, 5)
+        self.conv2value = nn.Conv2d(10, 10, kernel_size=5,stride=1,padding=(2,2))
+        self.conv2prec = nn.Conv2d(10, 10, kernel_size=5,stride=1,padding=(2,2))
+        self.conv2neigh = nn.Conv2d(10, 4, kernel_size=5,stride=1,padding=(2,2))
+        self.fc1 = nn.Linear(10*12*12, 10)
+        self.fc2 = nn.Linear(10, 1)
+        
+        self.logC1 = torch.nn.Parameter(torch.Tensor(-2*np.ones((self.neighbors.shape[0],10))))
+        self.register_parameter('logC_1', self.logC1)
+        self.logC2 = torch.nn.Parameter(torch.Tensor(-2*np.ones((self.neighbors.shape[0],10))))
+        self.register_parameter('logC_2', self.logC2)
+        
+        self.Nrep = Nrep
+    def forward(self, x):
+        x = self.norm(x)
+        epsilon = 0.000001
+        value1in = F.relu(self.conv1value(x))
+        prec1in = F.relu(self.conv1prec(x))+ epsilon
+        neigh1 = F.relu(self.conv1neigh(x)).unsqueeze(0).permute((2,1,0,3,4))
+        value1 = value1in
+        prec1 = prec1in 
+        out1 = self.pool(value1)
+        value2in = F.relu(self.conv2value(out1))
+        prec2in = F.relu(self.conv2prec(out1))+ epsilon
+        neigh2 = F.relu(self.conv2neigh(out1)).unsqueeze(0).permute((2,1,0,3,4))
+        value2 = value2in
+        prec2 = prec2in 
+        neighbors = self.neighbors
+        C1 = torch.exp(self.logC1).unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
+        C2 = torch.exp(self.logC2).unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
+        for i in range(self.Nrep):
+            neighValues1 = get_shifted_values(value1,neighbors)
+            neighPrec1 = get_shifted_values(prec1,neighbors)
+            neighPrec1 = (neigh1*C1*neighPrec1)/(neigh1*C1 + neighPrec1+epsilon)
+            prec1 = prec1in + torch.sum(neighPrec1,0)
+            value1 = (prec1in*value1in + torch.sum(neighPrec1*neighValues1,0))/prec1
+            out1 = self.pool(value1)
+            
+            value2in = F.relu(self.conv2value(out1))
+            prec2in = F.relu(self.conv2prec(out1))+ epsilon
+            neigh2 = F.relu(self.conv2neigh(out1)).unsqueeze(0).permute((2,1,0,3,4))
+            neighValues2 = get_shifted_values(value2,neighbors)
+            neighPrec2 = get_shifted_values(prec2,neighbors)
+            neighPrec2 = (neigh2*C2*neighPrec2)/(neigh2*C2 + neighPrec2+epsilon)
+            prec2 = prec2in + torch.sum(neighPrec2,0)
+            value2 = (prec2in*value2in + torch.sum(neighPrec2*neighValues2,0))/prec2
+            out2 = self.pool(value2)
+        x = out2.view(-1, 10 * 12 * 12)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        x = torch.exp(x)/(torch.exp(x)+1)
+        return x
+    def init_weights(self):
+        self.apply(init_weights_layer_conv)
+        self.apply(init_weights_layer_linear)
+
+
+
+
+
+
 ## Dataset definition (for reading from disk)
 class dead_leaves_dataset(Dataset):
     """dead leaves dataset."""
@@ -237,15 +324,14 @@ def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf):
         #if i % 25 == 24:
         #    print(l.item())
 
-def optimize_saved(model,N,root_dir,lr=0.01,momentum=0,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf):
+def optimize_saved(model,N,root_dir,lr=0.01,momentum=0,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
     # optimizer:
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum)
-    smooth_l = 0
     
     print('starting optimization\n')
-    with tqdm.tqdm(total=N*len(d), dynamic_ncols=True,smoothing=0.01) as pbar:
+    with tqdm.tqdm(total=min(N*len(d),kMax*batchsize), dynamic_ncols=True,smoothing=0.01) as pbar:
         losses = np.zeros(int(N*len(d)/batchsize))
         k = 0
         for iEpoch in range(N):
@@ -267,6 +353,37 @@ def optimize_saved(model,N,root_dir,lr=0.01,momentum=0,batchsize=20,clip=np.inf,
                     np.save(loss_file,losses)
                 if k>=kMax:
                     return
+
+def overtrain(model,root_dir,lr=0.01,momentum=0,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0):
+    d = dead_leaves_dataset(root_dir)
+    dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
+    # optimizer:
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum)
+    print('starting optimization\n')
+    with tqdm.tqdm(total=min(len(d),batchsize*kMax), dynamic_ncols=True,smoothing=0.01) as pbar:
+        losses = np.zeros(int(len(d)/batchsize))
+        k = 0
+        for i,samp in enumerate(dataload):
+            k=k+1
+            if i == 0:
+                x_tensor = samp['image']
+                y_tensor = samp['solution']
+            optimizer.zero_grad()
+            y_est = model.forward(x_tensor)
+            l = loss(y_est,y_tensor)
+            l.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), clip)
+            optimizer.step()
+            smooth_l = smooth_display*smooth_l+(1-smooth_display) * l.item()
+            losses[k-1]=l.item()
+            pbar.postfix = ',  loss:%0.5f' % (smooth_l/(1-smooth_display**k))
+            pbar.update(batchsize)
+            if loss_file and not (k%25):
+                np.save(loss_file,losses)
+            if k>=kMax:
+                return
+    
+
 
 
 def evaluate(model,root_dir,batchsize=20):
@@ -317,6 +434,9 @@ def main(argv):
     
 if __name__== "__main__":
     main(sys.argv[1:])
+    #m = model_pred_like()
+    #optimize_saved(m,1,'training',lr=0.01,momentum=0,batchsize=8,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=5)
+    #pass
 
 ## Fiddeling
 #model = model_class()
