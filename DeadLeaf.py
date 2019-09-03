@@ -644,7 +644,7 @@ def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,8
         abs_angle_list.append(abs_angle)
         distance_list.append(distance)
         im_name = 'image%07d.png' % i
-        io.imsave(os.path.join(root_dir,im_name), image)
+        io.imsave(os.path.join(root_dir,im_name), (255*image).astype('uint8'))
         im_name_list.append(im_name)
     df = pd.DataFrame({'im_name':im_name_list,'solution':solution_list,'exponent':exponent_list,'angle':angle_list,
                        'abs_angle':abs_angle_list,'distance':distance_list})
