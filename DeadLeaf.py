@@ -33,15 +33,15 @@ def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1
     sizes = np.array(sizes)
     # correction for the different size of the possible area
     if len(np.array(sizes).shape) == 1:
-        probx = prob * (sizes+imSize[0])/(np.max(sizes)+imSize[0])
-        proby = prob * (sizes+imSize[1])/(np.max(sizes)+imSize[1])
+        probx = prob * (sizes+imSize[0]-1)/(np.max(sizes)+imSize[0]-1)
+        proby = prob * (sizes+imSize[1]-1)/(np.max(sizes)+imSize[1]-1)
         probx = probx/np.sum(probx)
         proby = proby/np.sum(proby)
         probcx = probx.cumsum()
         probcy = proby.cumsum()
     else:
-        prob = prob * (sizes[:,0]+imSize[0])/(np.max(sizes[:,0])+imSize[0])
-        prob = prob * (sizes[:,1]+imSize[1])/(np.max(sizes[:,1])+imSize[1])
+        prob = prob * (sizes[:,0]+imSize[0]-1)/(np.max(sizes[:,0])+imSize[0]-1)
+        prob = prob * (sizes[:,1]+imSize[1]-1)/(np.max(sizes[:,1])+imSize[1]-1)
         prob = prob/np.sum(prob)
         probc = prob.cumsum()
     image = np.nan*np.zeros(imSize,dtype='float')
@@ -179,7 +179,52 @@ def fast_rect_conv(im,rect_size):
         imOut[iC] = current
     return imOut
    
-            
+      
+def show_test_positions():
+    imSize = np.array((300,300))
+    distances = [5,10,20,40,80]
+    distancesd = [4,7,14,28,57]
+    image = np.ones((300,300,3))
+    xlen = 2
+    for iPos in range(5):
+        for angle in range(2):
+            for abs_angle in range(2):
+                if angle:
+                    distance = distancesd[iPos]
+                else:
+                    distance = distances[iPos]
+                    
+                if angle and not abs_angle:
+                    pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
+                elif angle and abs_angle:
+                    pos = [[-distance/2,distance/2],[distance/2,-distance/2]]
+                elif not angle and not abs_angle:
+                    pos = [[-distance/2,0],[distance/2,0]]
+                elif not angle and abs_angle: 
+                    pos = [[0,-distance/2],[0,distance/2]]
+                pos = np.floor(np.array(pos))
+                
+                positions = pos
+                positions = np.floor(positions)
+                positions_im = np.zeros_like(positions)
+                positions_im[:,1] = np.ceil(imSize/2)+positions[:,0]
+                positions_im[:,0] = np.ceil(imSize/2)-positions[:,1]-1
+                if distance>20:
+                    for ix in range(1,xlen+1):
+                        for ip in range(2):
+                            image[np.uint(positions_im[ip,0]+ix),np.uint(positions_im[ip,1]+ix)] = [1,0,0]
+                            image[np.uint(positions_im[ip,0]+ix),np.uint(positions_im[ip,1]-ix)] = [1,0,0]
+                            image[np.uint(positions_im[ip,0]-ix),np.uint(positions_im[ip,1]+ix)] = [1,0,0]
+                            image[np.uint(positions_im[ip,0]-ix),np.uint(positions_im[ip,1]-ix)] = [1,0,0]
+                else:
+                    image[np.asarray(positions_im,dtype=np.int)[:,0],
+                          np.asarray(positions_im,dtype=np.int)[:,1],:] = [1,0,0]
+    image[0,:,:] = 0
+    image[-1,:,:] = 0
+    image[:,0,:] = 0
+    image[:,-1,:] = 0
+    return image
+      
 class dlMovie:
     def __init__(self,imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,border=False):    
         if prob is None:
@@ -248,14 +293,14 @@ class node:
     def __init__(self):
         self.children = None
         self.probChild = None
-    def add_children(self,image,sizes,colors,prob):
+    def add_children(self,image,sizes,colors,prob,silent=False):
         self.children = list()
         self.probChild = list()
         self.probInvisibleChild = list()
         kP = 0
         im2 = ~np.isnan(image)
         sizes = np.int32(sizes)
-        for iSize in tqdm.tqdm(sizes):
+        for iSize in tqdm.tqdm(sizes,disable=silent):
             fieldSize = np.prod(image.shape+iSize-1)
             # Found better convolution with same result!
             #recty = np.ones((iSize[0],1))
@@ -283,10 +328,10 @@ class node:
             kP = kP+1
         self.probInvisible = np.sum(np.array(self.probInvisibleChild))
         self.probPossible = np.sum(np.array(self.probChild))
-    def get_sample_child(self,image,sizes,colors,prob):
+    def get_sample_child(self,image,sizes,colors,prob,silent=False):
         # NOTE: This changes the image although it is not returned!
         if self.children is None:
-            self.add_children(image,sizes,colors,prob)
+            self.add_children(image,sizes,colors,prob,silent=silent)
         pc = np.cumsum(self.probChild)
         pc = pc/pc[-1]
         ran = np.random.rand()
@@ -299,14 +344,15 @@ class node:
         sizy = child[3]
         image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = np.nan
         return (child,self.probPossible,self.probInvisible)
-    def get_sample_child_explained_bias(self,image,sizes,colors,prob):
+    def get_sample_child_explained_bias(self,image,sizes,colors,prob,silent=False):
         # NOTE: This changes the image although it is not returned!
         if self.children is None:
-            self.add_children(image,sizes,colors,prob)
-        pCorrection = np.array(self.children)[:,5]+ np.log(self.probChild)
+            self.add_children(image,sizes,colors,prob,silent=silent)
+        pCorrection = np.array(self.children)[:,5]*np.log(len(colors))+ np.log(self.probChild)
         pCorrection = pCorrection-np.max(pCorrection)
         p = np.exp(pCorrection)
         pc = np.cumsum(p)
+        p = p/pc[-1]
         pc = pc/pc[-1]
         ran = np.random.rand()
         idx = np.argmax(ran<pc)
@@ -317,12 +363,12 @@ class node:
         sizx = child[2]
         sizy = child[3]
         image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = np.nan
-        logpCorrection = np.log(p[idx]/self.probChild[idx])
+        logpCorrection = np.log(p[idx])-np.log(self.probChild[idx])+np.log(self.probPossible)
         return (child,self.probPossible,self.probInvisible,logpCorrection)
-    def get_ML_child(self,image,sizes,colors,prob):
+    def get_ML_child(self,image,sizes,colors,prob,silent=False):
         # NOTE: This changes the image although it is not returned!
         if self.children is None:
-            self.add_children(image,sizes,colors,prob)
+            self.add_children(image,sizes,colors,prob,silent=silent)
         pCorrection = np.array(self.children)[:,5]+ np.log(self.probChild)
         #pCorrection = pCorrection-np.max(pCorrection)
         idx = np.argmax(pCorrection)
@@ -339,12 +385,16 @@ class node:
         
 class graph: 
     def __init__(self,image,sizes=default_sizes,colors=default_colors_255,prob=None):
-        self.image = np.array(image)
+        image = np.array(image)
+        if len(image.shape)>2:
+            image[image[:,:,0]!=image[:,:,1],:] =np.nan
+            image = np.mean(image,axis=2)
+        self.image = image
+        imSize = self.image.shape
         if prob is None:
             self.prob = np.ones(len(sizes))
         else:
             self.prob = prob
-        imSize = self.image.shape
         assert np.all(self.prob>0), 'probabilities for shapes must be >0'
         assert len(self.prob) == len(sizes), 'probabilities and sizes should have equal length'
         if len(np.array(sizes).shape) == 1:
@@ -353,11 +403,12 @@ class graph:
         else:
             self.sizes = np.array(sizes)
         self.colors = colors
-        prob = self.prob * (self.sizes[:,0]+imSize[0])/(np.max(self.sizes[:,0])+imSize[0])
-        prob = self.prob * (self.sizes[:,1]+imSize[1])/(np.max(self.sizes[:,1])+imSize[1])
-        self.prob = prob/np.sum(prob)
-        self.probc = prob.cumsum()
-    def get_decomposition(self,points=None):
+        self.prob = self.prob * (self.sizes[:,0]+imSize[0]-1)/(np.max(self.sizes[:,0])+imSize[0]-1)
+        self.prob = self.prob * (self.sizes[:,1]+imSize[1]-1)/(np.max(self.sizes[:,1])+imSize[1]-1)
+        self.prob = self.prob/np.sum(self.prob)
+        self.probc = self.prob.cumsum()
+        
+    def get_decomposition(self,points=None,silent=False):
         logPPos = 0
         logPVis = 0
         rectList = np.zeros((0,6),dtype=np.int16)
@@ -370,13 +421,14 @@ class graph:
         k = 0
         while np.any(~np.isnan(im)):
             n = node()
-            (rect,pPos,pInVis) = n.get_sample_child(im,self.sizes,self.colors,self.prob)
+            (rect,pPos,pInVis) = n.get_sample_child(im,self.sizes,self.colors,self.prob,silent=silent)
             logPPos = logPPos + np.log(pPos)
             logPVis = logPVis + np.log(1-pInVis)
             k = k+1
             rectList = np.append(rectList,[rect],axis=0)
-            print(k)
-            print(np.sum(~np.isnan(im)))
+            if not silent:
+                print(k)
+                print(np.sum(~np.isnan(im)))
             if all_contained is None and points is not None:
                 if np.all(np.logical_and(
                         np.logical_and(points[:,0]>=rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
@@ -386,9 +438,9 @@ class graph:
                         np.logical_and(points[:,0]>=rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
                         np.logical_and(points[:,1]>=rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
                     all_contained = False
-        logPCorrection = - rectList.shape[0]* np.log(len(self.colors))
+        logPCorrection = 0#- rectList.shape[0]* np.log(len(self.colors))
         return (rectList,all_contained,logPPos,logPVis,logPCorrection)
-    def get_decomposition_explained_bias(self,points=None):
+    def get_decomposition_explained_bias(self,points=None,silent=False):
         logPPos = 0
         logPVis = 0
         logPCorrection = 0
@@ -402,26 +454,26 @@ class graph:
         k = 0
         while np.any(~np.isnan(im)):
             n = node()
-            (rect,pPos,pInVis,correction) = n.get_sample_child_explained_bias(im,self.sizes,self.colors,self.prob)
+            (rect,pPos,pInVis,correction) = n.get_sample_child_explained_bias(im,self.sizes,self.colors,self.prob,silent=silent)
             logPPos = logPPos + np.log(pPos)
             logPVis = logPVis + np.log(1-pInVis)
             logPCorrection = logPCorrection-correction
             k = k+1
             rectList = np.append(rectList,[rect],axis=0)
-            print(k)
-            print(np.sum(~np.isnan(im)))
+            if not silent:
+                print(k)
+                print(np.sum(~np.isnan(im)))
             if all_contained is None and points is not None:
                 if np.all(np.logical_and(
-                        np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
-                        np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
+                        np.logical_and(points[:,0]>=rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
+                        np.logical_and(points[:,1]>=rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
                     all_contained = True
                 elif np.any(np.logical_and(
-                        np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
-                        np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
+                        np.logical_and(points[:,0]>=rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
+                        np.logical_and(points[:,1]>=rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
                     all_contained = False
-        logPCorrection = logPCorrection- rectList.shape[0]* np.log(len(self.colors))
         return (rectList,all_contained,logPPos,logPVis,logPCorrection)
-    def get_decomposition_max_explained(self,points = None):
+    def get_decomposition_max_explained(self,points = None,silent=False):
         logPPos = 0
         logPVis = 0
         logPCorrection = 0
@@ -435,28 +487,28 @@ class graph:
         k = 0
         while np.any(~np.isnan(im)):
             n = node()
-            (rect,pPos,pInVis,correction) = n.get_ML_child(im,self.sizes,self.colors,self.prob)
+            (rect,pPos,pInVis,correction) = n.get_ML_child(im,self.sizes,self.colors,self.prob,silent=silent)
             logPPos = logPPos + np.log(pPos)
             logPVis = logPVis + np.log(1-pInVis)
             logPCorrection = logPCorrection-correction
             k = k+1
             rectList = np.append(rectList,[rect],axis=0)
-            print(k)
-            print(np.sum(~np.isnan(im)))
+            if not silent:
+                print(k)
+                print(np.sum(~np.isnan(im)))
             if all_contained is None and points is not None:
                 if np.all(np.logical_and(
-                        np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
-                        np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
+                        np.logical_and(points[:,0]>=rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
+                        np.logical_and(points[:,1]>=rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
                     all_contained = True
                 elif np.any(np.logical_and(
-                        np.logical_and(points[:,0]>=n.rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
-                        np.logical_and(points[:,1]>=n.rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
+                        np.logical_and(points[:,0]>=rectList[-1,0],points[:,0]<(rectList[-1,0]+rectList[-1,2])),
+                        np.logical_and(points[:,1]>=rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
                     all_contained = False
-        logPCorrection = logPCorrection- rectList.shape[0]* np.log(len(self.colors))
         return (rectList,all_contained,logPPos,logPVis,logPCorrection)
         
   
-def generate_image(exponent,border,distance,angle,abs_angle,sizes,imSize=np.array([300,300]),num_colors=9):
+def generate_image(exponent,border,distance,angle,abs_angle,sizes,imSize=np.array([300,300]),num_colors=9,mark_points=True):
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
     
     if angle and not abs_angle:
@@ -472,8 +524,8 @@ def generate_image(exponent,border,distance,angle,abs_angle,sizes,imSize=np.arra
     positions = pos
     positions = np.floor(positions)
     positions_im = np.zeros_like(positions)
-    positions_im[:,1] = np.floor(imSize/2)+positions[:,0]
-    positions_im[:,0] = np.floor(imSize/2)-positions[:,1]-1
+    positions_im[:,1] = np.ceil(imSize/2)+positions[:,0]
+    positions_im[:,0] = np.ceil(imSize/2)-positions[:,1]-1
     col = np.random.randint(num_colors)
     im = gen_rect_leaf(imSize,
           sizes=sizes,
@@ -486,8 +538,9 @@ def generate_image(exponent,border,distance,angle,abs_angle,sizes,imSize=np.arra
     image = im[0]
     image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
     image[im[0]==5,:] = [.5,.5,1]
-    image[np.asarray(positions_im,dtype=np.int)[:,0],
-          np.asarray(positions_im,dtype=np.int)[:,1],:] = [1,0,0]
+    if mark_points:
+        image[np.asarray(positions_im,dtype=np.int)[:,0],
+              np.asarray(positions_im,dtype=np.int)[:,1],:] = [1,0,0]
     return (image,im[1],positions_im,im[2],col)
 
 
@@ -536,7 +589,7 @@ def show_frozen_image(im_folder='imagesFrozen/',exponent=1,num_colors=9,dist=40,
     import PIL
     im_name = im_folder+"image%d_%d_%d_%d_%d_%d_%d.png" % (exponent,num_colors,dist,angle,abs_angle,i,border)
     im = PIL.Image.open(im_name)
-    im.show()
+    return im
                
 
 def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
