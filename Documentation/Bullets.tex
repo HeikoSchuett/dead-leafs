@@ -1,0 +1,47 @@
+\documentclass[a4paper]{article}
+
+\usepackage{amsmath}
+
+\begin{document}
+Calculations in the tree
+\begin{itemize}
+\item should do this properly
+\end{itemize}
+\begin{equation}
+P(topLeaf=l_0|image) \propto P(l_0)P(image|l_0)
+\end{equation}
+
+
+\begin{equation}
+P(r_0\dots r_n|image) \propto \left(\prod_{i=0}^n P(r_i)\right)\left(\prod_{i=0}^n(P(I_{part}|r_i))\right)
+\end{equation}
+
+
+with $r_0$ is the front rectangle:
+\begin{align}
+P(r_0\dots r_n|image)& = &P(r_0|r_1\dots r_n,image) P(r_1\dots r_n|image)\\
+& = & \frac{P(r_0)P(r_1\dots r_n,image|r_0)}{\int P(r_0)P(r_1\dots r_n,image|r_0) dr_0} P(r_1\dots r_n|image)
+\end{align}
+
+
+
+For each rectangle there are three outcomes when it is sampled:
+\begin{itemize}
+\item It fits and is visible  $(f,v)$
+\item it is invisible         $(-v)$
+\item it does not fit     $(-f,v)$
+\end{itemize}
+
+\begin{align}
+P((r_1\dots r_n)|I) &\propto \prod_{i=1}^n \frac{P(r_i) P(r_i  = f,v|r_1\dots r_{i-1},I)}{\sum_{j=1}^n P(r_j )P(r_j  = v|r_1\dots r_{i-1},I)} P(I|r_i)\\
+ &=  \frac{1}{n_c^n} \prod_{i=1}^n \frac{P(r_i) P(r_i  = f,v|r_1\dots r_{i-1},I)}{\sum_{j=1}^n P(r_j )P(r_j  = v|r_1\dots r_{i-1},I)} 
+\end{align}
+
+
+Indexing is off, but I think I can find an interpretation of this, i.e. I am missing the factor between visible and fitting rectangles for each added rectangle
+\begin{align}
+P((r_1\dots r_n) sampled|I) &\propto \prod_{i=1}^n \frac{P(r_i) P(r_i  = f,v|r_1\dots r_{i-1},I) }{\sum_{j=1}^n P(r_j )P(r_j  = f,v|r_1\dots r_{i-1},I)} 
+\end{align}
+
+
+\end{document}

@@ -25,12 +25,14 @@ def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1
         prob = np.ones(len(sizes))
     assert (imSize[0] % grid) ==0,'Image Size not compatible with grid'
     assert (imSize[1] % grid) ==0,'Image Size not compatible with grid'
+    fixedIdx = np.array(fixedIdx)
+    sizes = np.array(sizes)
+    prob = np.array(prob)
     assert np.all(np.array(sizes) % grid ==0),'Patch sizes not compatible with grid'
     assert noise>=0, 'noise is the standard deviation and thus should be >=0'
     assert np.all(prob>0), 'probabilities for shapes must be >0'
-    assert len(prob) == len(sizes), 'probabilities and sizes should have equal length'
-    fixedIdx = np.array(fixedIdx)
-    sizes = np.array(sizes)
+    assert prob.size == sizes.size, 'probabilities and sizes should have equal length'
+    
     # correction for the different size of the possible area
     if len(np.array(sizes).shape) == 1:
         probx = prob * (sizes+imSize[0]-1)/(np.max(sizes)+imSize[0]-1)
@@ -508,24 +510,26 @@ class graph:
         return (rectList,all_contained,logPPos,logPVis,logPCorrection)
         
   
-def generate_image(exponent,border,distance,angle,abs_angle,sizes,imSize=np.array([300,300]),num_colors=9,mark_points=True):
+def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None,imSize=np.array([300,300]),num_colors=9,mark_points=True):
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
-    
-    if angle and not abs_angle:
-        pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
-    elif angle and abs_angle:
-        pos = [[-distance/2,distance/2],[distance/2,-distance/2]]
-    elif not angle and not abs_angle:
-        pos = [[-distance/2,0],[distance/2,0]]
-    elif not angle and abs_angle: 
-        pos = [[0,-distance/2],[0,distance/2]]
-    pos = np.floor(np.array(pos))
-    
-    positions = pos
-    positions = np.floor(positions)
-    positions_im = np.zeros_like(positions)
-    positions_im[:,1] = np.ceil(imSize/2)+positions[:,0]
-    positions_im[:,0] = np.ceil(imSize/2)-positions[:,1]-1
+    if distance is None:
+        positions_im = np.random.randint(np.min(imSize),size=(2,2))
+    else:
+        if angle and not abs_angle:
+            pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
+        elif angle and abs_angle:
+            pos = [[-distance/2,distance/2],[distance/2,-distance/2]]
+        elif not angle and not abs_angle:
+            pos = [[-distance/2,0],[distance/2,0]]
+        elif not angle and abs_angle: 
+            pos = [[0,-distance/2],[0,distance/2]]
+        pos = np.floor(np.array(pos))
+        
+        positions = pos
+        positions = np.floor(positions)
+        positions_im = np.zeros_like(positions)
+        positions_im[:,1] = np.ceil(imSize/2)+positions[:,0]
+        positions_im[:,0] = np.ceil(imSize/2)-positions[:,1]-1
     col = np.random.randint(num_colors)
     im = gen_rect_leaf(imSize,
           sizes=sizes,
@@ -540,7 +544,7 @@ def generate_image(exponent,border,distance,angle,abs_angle,sizes,imSize=np.arra
     image[im[0]==5,:] = [.5,.5,1]
     if mark_points:
         image[np.asarray(positions_im,dtype=np.int)[:,0],
-              np.asarray(positions_im,dtype=np.int)[:,1],:] = [1,0,0]
+              np.asarray(positions_im,dtype=np.int)[:,1],:2] = [1,0]
     return (image,im[1],positions_im,im[2],col)
 
 
@@ -589,23 +593,29 @@ def show_frozen_image(im_folder='imagesFrozen/',exponent=1,num_colors=9,dist=40,
     import PIL
     im_name = im_folder+"image%d_%d_%d_%d_%d_%d_%d.png" % (exponent,num_colors,dist,angle,abs_angle,i,border)
     im = PIL.Image.open(im_name)
+    im.show()
     return im
                
 
 def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
-                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57])):
+                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57]),mark_points=True):
     # creates training images on the fly
     images = np.zeros((N,imSize[0],imSize[1],3))
     solution = np.zeros((N))
     for i in range(N):
         exponent = exponents[np.random.randint(len(exponents))]
-        angle = np.random.randint(2)
-        abs_angle = np.random.randint(2)
-        if angle:
-            distance = distancesd[np.random.randint(len(distancesd))]
+        if distances is None:
+            distance = None
+            angle = None
+            abs_angle = None
         else:
-            distance = distances[np.random.randint(len(distances))]
-        im = generate_image(exponent,0,distance,angle,abs_angle,sizes)
+            angle = np.random.randint(2)
+            abs_angle = np.random.randint(2)
+            if angle:
+                distance = distancesd[np.random.randint(len(distancesd))]
+            else:
+                distance = distances[np.random.randint(len(distances))]
+        im = generate_image(exponent,0,sizes,distance,angle,abs_angle,mark_points=mark_points,imSize=imSize)
         images[i] = im[0]
         if im[3]:
             solution[i] = 1
@@ -615,7 +625,7 @@ def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype
 
 
 def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
-                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57])):
+                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57]),mark_points=True):
     # saves training images into a folder
     if not os.path.isdir(root_dir):
         os.mkdir(root_dir)
@@ -627,13 +637,18 @@ def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,8
     im_name_list = list()
     for i in tqdm.trange(N,smoothing=0):
         exponent = exponents[np.random.randint(len(exponents))]
-        angle = np.random.randint(2)
-        abs_angle = np.random.randint(2)
-        if angle:
-            distance = distancesd[np.random.randint(len(distancesd))]
+        if distances is None:
+            distance = None
+            angle = None
+            abs_angle = None
         else:
-            distance = distances[np.random.randint(len(distances))]
-        im = generate_image(exponent,0,distance,angle,abs_angle,sizes)
+            angle = np.random.randint(2)
+            abs_angle = np.random.randint(2)
+            if angle:
+                distance = distancesd[np.random.randint(len(distancesd))]
+            else:
+                distance = distances[np.random.randint(len(distances))]
+        im = generate_image(exponent,0,sizes,distance,angle,abs_angle,mark_points=mark_points,imSize=imSize)
         image = im[0]
         if im[3]:
             solution_list.append(1)
@@ -644,7 +659,7 @@ def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,8
         abs_angle_list.append(abs_angle)
         distance_list.append(distance)
         im_name = 'image%07d.png' % i
-        io.imsave(os.path.join(root_dir,im_name), image)
+        io.imsave(os.path.join(root_dir,im_name), np.uint8(255*image))
         im_name_list.append(im_name)
     df = pd.DataFrame({'im_name':im_name_list,'solution':solution_list,'exponent':exponent_list,'angle':angle_list,
                        'abs_angle':abs_angle_list,'distance':distance_list})
