@@ -184,13 +184,12 @@ class model_deep_class(nn.Module):
 
 
 class model_recurrent(nn.Module):
-    def __init__(self,Nrep=20,Nneurons=1000):
+    def __init__(self,Nrep=20,Nneurons=10000):
         super(model_recurrent, self).__init__()
         self.norm = nn.InstanceNorm2d(3)
-        self.norm1 = nn.InstanceNorm1d(Nneurons)
+        self.norm_layer = nn.LayerNorm(Nneurons)
         self.fc1 = nn.Linear(Nneurons+(3*5*5), Nneurons)
-        self.fc2 = nn.Linear(Nneurons, Nneurons)
-        self.fc3 = nn.Linear(Nneurons, 1)
+        self.fc2 = nn.Linear(Nneurons, 1)
         self.Nrep = Nrep
         self.Nneurons = Nneurons
     def forward(self, x):
@@ -200,16 +199,14 @@ class model_recurrent(nn.Module):
         siz[1] = self.Nneurons
         h1 = torch.ones(siz)
         for i in range(self.Nrep):
-            inp1 = torch.cat((x,h1/(torch.mean(h1,1)+eps).view(-1,1)),dim=1)
-            h1 = F.relu(self.fc2(F.relu(self.fc1(inp1))) + h1)
-        x = self.fc3(h1)
+            inp1 = torch.cat((x,self.norm_layer(h1)),dim=1)
+            h1 = F.relu(self.fc1(inp1))
+        x = self.fc2(h1)
         x = (torch.exp(x)+eps)/(torch.exp(x)+1)
         return x
     def init_weights(self):
         self.apply(init_weights_layer_conv)
         self.apply(init_weights_layer_linear)
-
-
 
 
 def get_shifted_values(feat,neighbors):
@@ -371,9 +368,15 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_di
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
     print('starting optimization\n')
+    if loss_file:
+        if os.path.isfile(loss_file):
+            losses = np.load(loss_file)
+        else:
+            losses = np.array([])
     with tqdm.tqdm(total=min(N*len(d),kMax*batchsize), dynamic_ncols=True,smoothing=0.01) as pbar:
-        losses = np.zeros(int(N*len(d)/batchsize))
-        k = 0
+        k0 = len(losses)
+        k = k0
+        losses = np.concatenate((losses,np.zeros(int(N*len(d)/batchsize))))
         for iEpoch in range(N):
             for i,samp in enumerate(dataload):
                 k=k+1
@@ -387,7 +390,7 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_di
                 optimizer.step()
                 smooth_l = smooth_display*smooth_l+(1-smooth_display) * l.item()
                 losses[k-1]=l.item()
-                pbar.postfix = ',  loss:%0.5f' % (smooth_l/(1-smooth_display**k))
+                pbar.postfix = ',  loss:%0.5f' % (smooth_l/(1-smooth_display**(k-k0)))
                 pbar.update(batchsize)
                 if loss_file and not (k%25):
                     np.save(loss_file,losses)
