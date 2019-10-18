@@ -32,7 +32,7 @@ def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1
     assert noise>=0, 'noise is the standard deviation and thus should be >=0'
     assert np.all(prob>0), 'probabilities for shapes must be >0'
     assert prob.size == sizes.size, 'probabilities and sizes should have equal length'
-    
+
     # correction for the different size of the possible area
     if len(np.array(sizes).shape) == 1:
         probx = prob * (sizes+imSize[0]-1)/(np.max(sizes)+imSize[0]-1)
@@ -100,7 +100,7 @@ def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1
                 image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y)] = 5
             if (idx_y+sizy) <= imSize[1]:
                 image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y+sizy)-1] = 5
-                
+
     if border:
         b = image==5
     if noiseType=='norm':
@@ -114,7 +114,7 @@ def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1
     else:
         image[image>1] = 1
     return (image,rectList,oneObject)
-    
+
 
 def calc_prob_one(sizes = [5,10,15],grid=None,prob=None,dx = 1,dy = 1):
     sizes = np.array(sizes)
@@ -123,7 +123,7 @@ def calc_prob_one(sizes = [5,10,15],grid=None,prob=None,dx = 1,dy = 1):
         dx = dx/grid
         dy = dy/grid
     if prob is None:
-        prob = np.ones(len(sizes)) 
+        prob = np.ones(len(sizes))
     if len(sizes.shape) == 1:
         sizes = cartesian([sizes,sizes])
         prob = np.outer(prob,prob).flatten()
@@ -180,8 +180,8 @@ def fast_rect_conv(im,rect_size):
             current = current-im[iC-rect_size]
         imOut[iC] = current
     return imOut
-   
-      
+
+
 def show_test_positions():
     imSize = np.array((300,300))
     distances = [5,10,20,40,80]
@@ -195,17 +195,17 @@ def show_test_positions():
                     distance = distancesd[iPos]
                 else:
                     distance = distances[iPos]
-                    
+
                 if angle and not abs_angle:
                     pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
                 elif angle and abs_angle:
                     pos = [[-distance/2,distance/2],[distance/2,-distance/2]]
                 elif not angle and not abs_angle:
                     pos = [[-distance/2,0],[distance/2,0]]
-                elif not angle and abs_angle: 
+                elif not angle and abs_angle:
                     pos = [[0,-distance/2],[0,distance/2]]
                 pos = np.floor(np.array(pos))
-                
+
                 positions = pos
                 positions = np.floor(positions)
                 positions_im = np.zeros_like(positions)
@@ -226,9 +226,9 @@ def show_test_positions():
     image[:,0,:] = 0
     image[:,-1,:] = 0
     return image
-      
+
 class dlMovie:
-    def __init__(self,imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,border=False):    
+    def __init__(self,imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,border=False):
         if prob is None:
             self.prob = np.ones(len(sizes))
         else:
@@ -383,9 +383,9 @@ class node:
         image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = np.nan
         logpCorrection = pCorrection[idx] - np.log(self.probChild[idx])
         return (child,self.probPossible,self.probInvisible,logpCorrection)
-        
-        
-class graph: 
+
+
+class graph:
     def __init__(self,image,sizes=default_sizes,colors=default_colors_255,prob=None):
         image = np.array(image)
         if len(image.shape)>2:
@@ -409,7 +409,7 @@ class graph:
         self.prob = self.prob * (self.sizes[:,1]+imSize[1]-1)/(np.max(self.sizes[:,1])+imSize[1]-1)
         self.prob = self.prob/np.sum(self.prob)
         self.probc = self.prob.cumsum()
-        
+
     def get_decomposition(self,points=None,silent=False):
         logPPos = 0
         logPVis = 0
@@ -508,8 +508,8 @@ class graph:
                         np.logical_and(points[:,1]>=rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
                     all_contained = False
         return (rectList,all_contained,logPPos,logPVis,logPCorrection)
-        
-  
+
+
 def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None,imSize=np.array([300,300]),num_colors=9,mark_points=True):
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
     if distance is None:
@@ -521,10 +521,10 @@ def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None
             pos = [[-distance/2,distance/2],[distance/2,-distance/2]]
         elif not angle and not abs_angle:
             pos = [[-distance/2,0],[distance/2,0]]
-        elif not angle and abs_angle: 
+        elif not angle and abs_angle:
             pos = [[0,-distance/2],[0,distance/2]]
         pos = np.floor(np.array(pos))
-        
+
         positions = pos
         positions = np.floor(positions)
         positions_im = np.zeros_like(positions)
@@ -595,7 +595,7 @@ def show_frozen_image(im_folder='imagesFrozen/',exponent=1,num_colors=9,dist=40,
     im = PIL.Image.open(im_name)
     im.show()
     return im
-               
+
 
 def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
                          distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57]),mark_points=True):
@@ -621,7 +621,7 @@ def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype
             solution[i] = 1
         else:
             solution[i] = 0
-    return images,solution     
+    return images,solution
 
 
 def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
@@ -659,13 +659,13 @@ def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,8
         abs_angle_list.append(abs_angle)
         distance_list.append(distance)
         im_name = 'image%07d.png' % i
-        io.imsave(os.path.join(root_dir,im_name), np.uint8(255*image))
+        io.imsave(os.path.join(root_dir,im_name), (255*image).astype('uint8'))
         im_name_list.append(im_name)
     df = pd.DataFrame({'im_name':im_name_list,'solution':solution_list,'exponent':exponent_list,'angle':angle_list,
                        'abs_angle':abs_angle_list,'distance':distance_list})
     df.to_csv(os.path.join(root_dir,'solution.csv'))
-    
-    
+
+
 def reduce_image(image,points=None,method='line'):
     image = image.copy().astype(np.float)
     if len(image.shape) == 3:
