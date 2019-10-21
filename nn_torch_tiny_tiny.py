@@ -9,6 +9,7 @@ Neural network training pytorch variant
 import sys, getopt
 import os
 
+import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -55,7 +56,6 @@ class model_min_class(nn.Module):
         x = self.norm(x)
         x = x.view(-1, 3 * imSize[0] * imSize[1])
         x = self.fc(x)
-        x = (torch.exp(x)+eps)/(torch.exp(x)+1)
         return x
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -75,7 +75,6 @@ class model_class(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        x = (torch.exp(x)+eps)/(torch.exp(x)+1)
         return x
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -123,7 +122,6 @@ class model_residual(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        x = (torch.exp(x)+eps)/(torch.exp(x)+1)
         return x
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -146,7 +144,6 @@ class model2_class(nn.Module):
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
         x = self.fc5(x)
-        x = (torch.exp(x)+eps)/(torch.exp(x)+1)
         return x
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -177,32 +174,81 @@ class model_deep_class(nn.Module):
         x = F.relu(self.fc7(x))
         x = F.relu(self.fc8(x))
         x = self.fc9(x)
-        x = (torch.exp(x)+eps)/(torch.exp(x)+1)
         return x
     def init_weights(self):
         self.apply(init_weights_layer_linear)
 
 
+class model_BLT(nn.Module):
+    def __init__(self,n_rep=5,n_neurons=10,kernel=3,L=True,T=True):
+        super(model_BLT, self).__init__()
+        self.norm = nn.InstanceNorm2d(3)
+        # Bottom-up
+        self.conv0_1 = nn.Conv2d(3, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)))
+        self.conv1_2 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)))
+        self.conv2_3 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)))
+        if L:
+            # Lateral
+            self.conv1_1 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)),bias=False)
+            self.conv2_2 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)),bias=False)
+            self.conv3_3 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)),bias=False)
+        if T:
+            # top-down
+            self.conv2_1 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)),bias=False)
+            self.conv3_2 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)),bias=False)
+        self.fc1 = nn.Linear(n_neurons*5*5, 1)
+        self.n_rep = n_rep
+        self.n_neurons = n_neurons
+        self.L = L
+        self.T = T
+    def forward(self, x):
+        x = self.norm(x)
+        h1 = torch.zeros([x.shape[0],self.n_neurons,5,5],device=x.device)
+        h2 = torch.zeros([x.shape[0],self.n_neurons,5,5],device=x.device)
+        h3 = torch.zeros([x.shape[0],self.n_neurons,5,5],device=x.device)
+        for i in range(self.n_rep):
+            if self.L and self.T:
+                h1 = F.relu(self.conv0_1(x)+self.conv1_1(h1)+self.conv2_1(h2))
+                h2 = F.relu(self.conv1_2(h1)+self.conv2_2(h2)+self.conv3_2(h3))
+                h3 = F.relu(self.conv2_3(h2)+self.conv3_3(h3))
+            elif self.L:
+                h1 = F.relu(self.conv0_1(x)+self.conv1_1(h1))
+                h2 = F.relu(self.conv1_2(h1)+self.conv2_2(h2))
+                h3 = F.relu(self.conv2_3(h2)+self.conv3_3(h3))
+            elif self.T:
+                h1 = F.relu(self.conv0_1(x)+self.conv1_1(h1)+self.conv2_1(h2))
+                h2 = F.relu(self.conv1_2(h1)+self.conv2_2(h2)+self.conv3_2(h3))
+                h3 = F.relu(self.conv2_3(h2)+self.conv3_3(h3))
+            else:
+                h1 = F.relu(self.conv0_1(x))
+                h2 = F.relu(self.conv1_2(h1))
+                h3 = F.relu(self.conv2_3(h2))
+        x = h3.view(-1,self.n_neurons*5*5)
+        x = self.fc1(x)
+        return x
+    def init_weights(self):
+        self.apply(init_weights_layer_conv)
+        self.apply(init_weights_layer_linear)
+        
+
 class model_recurrent(nn.Module):
-    def __init__(self,Nrep=20,Nneurons=10000):
+    def __init__(self,n_rep=20,n_neurons=10000):
         super(model_recurrent, self).__init__()
         self.norm = nn.InstanceNorm2d(3)
-        self.norm_layer = nn.LayerNorm(Nneurons)
-        self.fc1 = nn.Linear(Nneurons+(3*5*5), Nneurons)
-        self.fc2 = nn.Linear(Nneurons, 1)
-        self.Nrep = Nrep
-        self.Nneurons = Nneurons
+        self.fc1 = nn.Linear(n_neurons+(3*5*5), n_neurons)
+        self.fc2 = nn.Linear(n_neurons, 1)
+        self.n_rep = n_rep
+        self.n_neurons = n_neurons
     def forward(self, x):
         x = self.norm(x)
         x = x.view(-1,3*5*5)
         siz = list(x.shape)
-        siz[1] = self.Nneurons
-        h1 = torch.ones(siz)
-        for i in range(self.Nrep):
-            inp1 = torch.cat((x,self.norm_layer(h1)),dim=1)
+        siz[1] = self.n_neurons
+        h1 = torch.ones(siz,device=x.device)
+        for i in range(self.n_rep):
+            inp1 = torch.cat((x,(h1-torch.mean(h1,dim=1).view(-1,1))/(eps+h1.std())),dim=1)
             h1 = F.relu(self.fc1(inp1))
         x = self.fc2(h1)
-        x = (torch.exp(x)+eps)/(torch.exp(x)+1)
         return x
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -226,7 +272,7 @@ def get_shifted_values(feat,neighbors):
     return output  
 
 class model_pred_like(nn.Module):
-    def __init__(self,Nrep=5,neighbors=np.array([[0,-1],[0,1],[1,0],[-1,0]])):
+    def __init__(self,n_rep=5,neighbors=np.array([[0,-1],[0,1],[1,0],[-1,0]])):
         super(model_pred_like, self).__init__()
         self.neighbors = neighbors
         self.norm = nn.InstanceNorm2d(3)
@@ -246,7 +292,7 @@ class model_pred_like(nn.Module):
         self.logC2 = torch.nn.Parameter(torch.Tensor(-2*np.ones((self.neighbors.shape[0],10))))
         self.register_parameter('logC_2', self.logC2)
         
-        self.Nrep = Nrep
+        self.n_rep = n_rep
     def forward(self, x):
         x = self.norm(x)
         epsilon = 0.000001
@@ -264,7 +310,7 @@ class model_pred_like(nn.Module):
         neighbors = self.neighbors
         C1 = torch.exp(self.logC1).unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
         C2 = torch.exp(self.logC2).unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
-        for i in range(self.Nrep):
+        for i in range(self.n_rep):
             neighValues1 = get_shifted_values(value1,neighbors)
             neighPrec1 = get_shifted_values(prec1,neighbors)
             neighPrec1 = (neigh1*C1*neighPrec1)/(neigh1*C1 + neighPrec1+epsilon)
@@ -284,7 +330,6 @@ class model_pred_like(nn.Module):
         x = out2.view(-1, 10)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        x = torch.exp(x)/(torch.exp(x)+1)
         return x
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -329,15 +374,19 @@ class dead_leaves_dataset(Dataset):
 ## Function definitions
         
 def loss(x,y):
-    l1 = -torch.mean(torch.flatten(y)*torch.log(torch.flatten(x)))
-    l2 = -torch.mean(torch.flatten(1-y)*torch.log(1-torch.flatten(x)))
+    x = torch.flatten(x)
+    x2 = -torch.logsumexp(torch.stack((x,torch.zeros_like(x))),0)
+    x1 = x+x2
+    #x = (torch.exp(x))/(torch.exp(x)+1)
+    l1 = -torch.mean(torch.flatten(y)*x1)
+    l2 = -torch.mean(torch.flatten(1-y)*x2)
     return l1+l2
 
 def accuracy(x,y):
     x = torch.gt(x,0.5).float().flatten()
     return torch.mean(torch.eq(x,y.flatten()).float())
 
-def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf):
+def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf, device='cpu'):
     # optimizer:
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum)
     
@@ -364,7 +413,7 @@ def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf):
         #if i % 25 == 24:
         #    print(l.item())
 
-def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0):
+def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu'):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
     print('starting optimization\n')
@@ -380,8 +429,8 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_di
         for iEpoch in range(N):
             for i,samp in enumerate(dataload):
                 k=k+1
-                x_tensor = samp['image']
-                y_tensor = samp['solution']
+                x_tensor = samp['image'].to(device)
+                y_tensor = samp['solution'].to(device)
                 optimizer.zero_grad()
                 y_est = model.forward(x_tensor)
                 l = loss(y_est,y_tensor)
@@ -397,7 +446,7 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_di
                 if k>=kMax:
                     return
 
-def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0):
+def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu'):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
     print('starting optimization\n')
@@ -407,8 +456,8 @@ def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0
         for i,samp in enumerate(dataload):
             k=k+1
             if i == 0:
-                x_tensor = samp['image']
-                y_tensor = samp['solution']
+                x_tensor = samp['image'].to(device)
+                y_tensor = samp['solution'].to(device)
             optimizer.zero_grad()
             y_est = model.forward(x_tensor)
             l = loss(y_est,y_tensor)
@@ -422,7 +471,7 @@ def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0
             if k>=kMax:
                 return
 
-def evaluate(model,root_dir,batchsize=20):
+def evaluate(model,root_dir,batchsize=20, device='cpu'):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=2)
     with tqdm.tqdm(total=len(d), dynamic_ncols=True,smoothing=0.01) as pbar:
@@ -430,8 +479,8 @@ def evaluate(model,root_dir,batchsize=20):
             losses = np.zeros(int(len(d)/batchsize))
             accuracies = np.zeros(int(len(d)/batchsize))
             for i,samp in enumerate(dataload):
-                x_tensor = samp['image']
-                y_tensor = samp['solution']
+                x_tensor = samp['image'].to(device)
+                y_tensor = samp['solution'].to(device)
                 y_est = model.forward(x_tensor)
                 l = loss(y_est,y_tensor)
                 acc = accuracy(y_est,y_tensor)
@@ -451,7 +500,7 @@ def count_positive(root_dir):
         all_samples = all_samples + len(samp['solution'].detach().numpy())
     return pos_samples,all_samples
 
-def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20):
+def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3):
     filename = 'model_tiny_%s' % model_name
     if model_name == 'model':
         model = model_class().to(device)
@@ -462,17 +511,32 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
     elif model_name == 'pred':
         model = model_pred_like().to(device)
     elif model_name == 'recurrent':
-        model = model_recurrent().to(device)
+        model = model_recurrent(n_rep=time).to(device)
     elif model_name == 'min':
         model = model_min_class().to(device)
     elif model_name == 'res':
         model = model_residual().to(device)
+    elif model_name == 'BLT':
+        model = model_BLT(n_rep=time,n_neurons=n_neurons,kernel=kernel,L=True,T=True).to(device)
+    elif model_name == 'BL':
+        model = model_BLT(n_rep=time,n_neurons=n_neurons,kernel=kernel,L=True,T=False).to(device)
+    elif model_name == 'BT':
+        model = model_BLT(n_rep=time,n_neurons=n_neurons,kernel=kernel,L=False,T=True).to(device)
+    elif model_name == 'B':
+        model = model_BLT(n_rep=time,n_neurons=n_neurons,kernel=kernel,L=False,T=False).to(device)
+    if not n_neurons==10:
+        filename = filename + '_nn%02d' % n_neurons
+    if not kernel==3:
+        filename = filename + '_k%02d' % kernel
+    if not time==5:
+        filename = filename + '_%02d' % time
     path= '/Users/heiko/tinytinydeadrects/models/' + filename + '.pt'
     path_opt= '/Users/heiko/tinytinydeadrects/models/' + filename + '_opt.pt'
     path_loss= '/Users/heiko/tinytinydeadrects/models/' + filename + '_loss.npy'
     path_l= '/Users/heiko/tinytinydeadrects/models/' + filename + '_l.npy'
     path_acc= '/Users/heiko/tinytinydeadrects/models/' + filename + '_acc.npy'
     optimizer = torch.optim.Adam(model.parameters(),lr = lr,amsgrad=True,weight_decay=weight_decay)
+    #optimizer = torch.optim.SGD(model.parameters(),lr = lr,weight_decay=weight_decay)
     if action == 'reset':
         os.remove(path)
         os.remove(path_opt)
@@ -485,19 +549,19 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         optimizer.param_groups[0]['lr'] = lr
     if action == 'train':
         data_folder = '/Users/heiko/tinytinydeadrects/training'
-        optimize_saved(model,epochs,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=path_loss,kMax=kMax)
+        optimize_saved(model,epochs,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=path_loss,kMax=kMax,device=device)
         torch.save(model.state_dict(),path)
         torch.save(optimizer.state_dict(),path_opt)
         return model
     elif action =='eval': 
         data_folder = '/Users/heiko/tinytinydeadrects/validation'
-        l,acc = evaluate(model,data_folder,batchsize=batchsize)
+        l,acc = evaluate(model,data_folder,batchsize=batchsize,device=device)
         np.save(path_l,np.array(l))
         np.save(path_acc,np.array(acc))
         return acc,l
     elif action =='overtrain':
         data_folder = '/Users/heiko/tinytinydeadrects/training'
-        overtrain(model,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=kMax)
+        overtrain(model,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=kMax,device=device)
     elif action == 'print':
         print(filename)
         if os.path.isfile(path_l):
@@ -519,10 +583,14 @@ if __name__ == '__main__':
     parser.add_argument("-d","--device", help="device to run on [cuda,cpu]", choices=['cuda', 'cpu'],default='cpu')
     parser.add_argument("-E","--epochs", help="numer of epochs", type = int ,default=1)
     parser.add_argument("-b","--batch_size", help="size of a batch", type = int ,default=20)
-    parser.add_argument("-w","--weight_decay",type=float,help="how much weight decay?",default=10**-3)
+    parser.add_argument("-w","--weight_decay",type=float,help="how much weight decay?",default=0)
     parser.add_argument("-l","--learning_rate",type=float,help="learning rate",default=10**-3)
     parser.add_argument("-k","--kMax",type=int,help="maximum number of training steps",default=np.inf)
+    parser.add_argument("-t","--time",type=int,help="number of timesteps",default=5)
+    parser.add_argument("-n","--n_neurons",type=int,help="number of neurons/features",default=10)
+    parser.add_argument("--kernel",type=int,help="kernel size",default=3)
     parser.add_argument("action",help="what to do? [train,eval,overtrain,print,reset]", choices=['train', 'eval', 'overtrain', 'print', 'reset'])
-    parser.add_argument("model_name",help="model to be trained [model,deep,recurrent,pred,res,min,model2]", choices=['model','model2', 'deep','res','recurrent','pred','min'])
+    parser.add_argument("model_name",help="model to be trained [model,deep,recurrent,pred,res,min,model2,BLT]", choices=['model','model2', 'deep','res','recurrent','pred','min','BLT','BT','BL','B'])
     args=parser.parse_args()
-    main(args.model_name,args.action,device=args.device,weight_decay=float(args.weight_decay),epochs=args.epochs,lr = args.learning_rate,kMax=args.kMax,batchsize=args.batch_size)
+    main(args.model_name,args.action,device=args.device,weight_decay=float(args.weight_decay),epochs=args.epochs,
+         lr = args.learning_rate,kMax=args.kMax,batchsize=args.batch_size,time=args.time,n_neurons=args.n_neurons,kernel=args.kernel)
