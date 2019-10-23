@@ -19,4 +19,8 @@ source activate test
 
 cd dead-leaves
 
+echo $index
+echo $job
+echo $ppn
+
 python bayes_tiny_tiny.py -i $SLURM_ARRAY_TASK_ID -p $HOME/tinytinydeadrects/validation

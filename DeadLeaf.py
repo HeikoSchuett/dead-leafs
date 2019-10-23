@@ -584,7 +584,9 @@ class graph:
 def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None,imSize=np.array([300,300]),num_colors=9,mark_points=True):
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
     if distance is None:
-        positions_im = np.random.randint(np.min(imSize),size=(2,2))
+        positions_im = np.ones((2,2))
+        while np.all(positions_im[0] == positions_im[1]):
+            positions_im = np.random.randint(np.min(imSize),size=(2,2))
     else:
         if angle and not abs_angle:
             pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
