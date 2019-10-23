@@ -17,6 +17,8 @@ module load anaconda3/5.3.1
 
 source activate test
 
+cd dead-leaves
+
 python bayes_tiny_tiny.py -i index -p '~/tinytinydeadrects/validation'
 
 EOF
