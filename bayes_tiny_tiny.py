@@ -25,7 +25,7 @@ cols = (255*np.linspace(0,1,nCols)).astype(np.uint8)
 
 def main(idx=0,root_dir = '/Users/heiko/tinytinydeadrects/training',exponent = 3):
     outdir = root_dir + 'Bayes'
-    if ~os.path.isdir(outdir):
+    if not os.path.isdir(outdir):
         os.mkdir(outdir)
     solutions_df = pd.read_csv(os.path.join(root_dir,'solution.csv'),index_col=0)
     img_name = os.path.join(root_dir,solutions_df['im_name'].iloc[idx])
