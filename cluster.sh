@@ -13,7 +13,7 @@ index=$SLURM_ARRAY_TASK_ID
 job=$SLURM_JOB_ID
 ppn=$SLURM_JOB_CPUS_PER_NODE
 module purge
-module load module load anaconda3/5.3.1
+module load anaconda3/5.3.1
 
 source activate test
 
