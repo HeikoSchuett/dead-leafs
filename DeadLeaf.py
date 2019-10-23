@@ -508,6 +508,77 @@ class graph:
                         np.logical_and(points[:,1]>=rectList[-1,1],points[:,1]<(rectList[-1,1]+rectList[-1,3])))):
                     all_contained = False
         return (rectList,all_contained,logPPos,logPVis,logPCorrection)
+    def get_exact_prob(self, points, silent=False):
+        if not silent:
+            np.set_printoptions(precision=2,linewidth=200,floatmode='fixed')
+        points = np.array(points)
+        n0 = node()
+        im = np.copy(self.image)
+        n0.add_children(im,self.sizes,self.colors,self.prob,silent=True)
+        nodes = [n0]
+        images = [im]
+        k = 0
+        p_node = 0
+        p_nodes = [p_node]
+        p_node_same = 0
+        p_same = [p_node_same]
+        p_prior = 1
+        p_priors = [p_prior]
+        same_rect_node = None
+        same_rect = [same_rect_node]
+        while len(nodes)>0:
+            n = nodes[-1]
+            im = images[-1]
+            if len(nodes)==1 and not silent:
+                k = k+1
+                print('started top-level child %d\n' % k)
+            if not silent:
+                print(np.array(p_nodes), end="\r")
+            if len(n.children)>0:
+                rect = n.children.pop()
+                p_child = n.probChild.pop()
+                p_invis = n.probInvisible
+                same_rect_node = same_rect[-1]
+                n_new = node()
+                im_new = np.copy(im)
+                idx_x = rect[0]
+                idx_y = rect[1]
+                sizx = rect[2]
+                sizy = rect[3]
+                im_new[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = np.nan
+                if same_rect_node is None:
+                    if np.all((idx_x<=points[:,0]) & (idx_x+sizx >points[:,0]) 
+                            & (idx_y<=points[:,1]) & (idx_y+sizy >points[:,1])):
+                        same_rect_node = True
+                    elif np.any((idx_x<=points[:,0]) & (idx_x+sizx >points[:,0]) 
+                            & (idx_y<=points[:,1]) & (idx_y+sizy >points[:,1])):
+                        same_rect_node = False
+                same_rect.append(same_rect_node)
+                n_new.add_children(im_new,self.sizes,self.colors,self.prob,silent=True)
+                p_prior_new = p_priors[-1]*p_child/(1-p_invis)
+                p_node_same = 0
+                p_same.append(p_node_same)
+                p_node = 0
+                p_nodes.append(p_node)
+                p_priors.append(p_prior_new)
+                nodes.append(n_new)
+                images.append(im_new)
+            else:
+                im = images.pop()
+                n = nodes.pop()
+                p_prior = p_priors.pop()
+                p_node = p_nodes.pop()
+                p_node_same = p_same.pop()
+                same_rect_node = same_rect.pop()
+                if len(nodes)>0:
+                    if np.all(np.isnan(im)):
+                        p_nodes[-1] = p_nodes[-1] + p_prior
+                        if same_rect_node:
+                            p_same[-1] = p_same[-1] + p_prior
+                    else:
+                        p_nodes[-1] = p_nodes[-1] + p_node
+                        p_same[-1] = p_same[-1] + p_node_same
+        return p_node_same,p_node
 
 
 def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None,imSize=np.array([300,300]),num_colors=9,mark_points=True):
