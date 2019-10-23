@@ -16,8 +16,8 @@ default_sizes = 5*np.arange(1,80,dtype='float')
 default_colors_1 = np.linspace(0,1,9)
 default_colors_255 = np.array([  0,  31,  63,  95, 127, 159, 191, 223, 255], dtype=np.uint8)
 
-def get_default_prob(exponent):
-    return (default_sizes/np.min(default_sizes)) ** -(exponent/2)
+def get_default_prob(exponent,sizes = default_sizes):
+    return (sizes/np.min(sizes)) ** -(exponent/2)
 
 
 def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,fixedC=0,fixedIdx=[],border=False):
@@ -510,7 +510,7 @@ class graph:
         return (rectList,all_contained,logPPos,logPVis,logPCorrection)
     def get_exact_prob(self, points, silent=False):
         if not silent:
-            np.set_printoptions(precision=2,linewidth=200,floatmode='fixed')
+            np.set_printoptions(precision=2,linewidth=100,floatmode='fixed')
         points = np.array(points)
         n0 = node()
         im = np.copy(self.image)
