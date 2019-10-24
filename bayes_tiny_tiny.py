@@ -38,7 +38,7 @@ def main(idx=0,root_dir = '/Users/heiko/tinytinydeadrects/training',exponent = 3
     points = np.where(points)
     #g.get_exact_prob(points)
     
-    nSamp = 500
+    nSamp = 5000
     
     l = []
     
@@ -53,6 +53,10 @@ def main(idx=0,root_dir = '/Users/heiko/tinytinydeadrects/training',exponent = 3
     logPVis = [s[3] for s in l]
     logPCorrection = [s[4] for s in l]
     data = np.stack((estimate,logPPos,logPVis,logPCorrection))
+    file_out = outdir+os.path.sep+ 'samples%07d.npy' % idx
+    if os.path.isfile(file_out):
+        data_load = np.load(file_out)
+        data = np.concatenate((data_load,data), axis = 1)
     np.save(outdir+os.path.sep+ 'samples%07d.npy' % idx,data)
     
     lik = np.array(logPPos)-np.array(logPVis)+np.array(logPCorrection)

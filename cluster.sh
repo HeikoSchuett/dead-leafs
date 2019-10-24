@@ -2,7 +2,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=1:00:00
+#SBATCH --time=2:00:00
 #SBATCH --mem=2GB
 #SBATCH --job-name=bayes_tiny_tiny
 #SBATCH --mail-type=END
