@@ -2,12 +2,12 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=4
-#SBATCH --time=2:00:00
+#SBATCH --time=4:00:00
 #SBATCH --mem=2GB
 #SBATCH --job-name=bayes_tiny_tiny
 #SBATCH --mail-type=END
 #SBATCH --mail-user=hhs4@nyu.edu
-#SBATCH --output=slurm-output/slurm_%j.out
+#SBATCH --output=slurm-output/slurm_%A_%a.out
 
 index=$SLURM_ARRAY_TASK_ID
 job=$SLURM_JOB_ID
