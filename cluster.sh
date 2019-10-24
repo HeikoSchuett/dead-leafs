@@ -7,7 +7,7 @@
 #SBATCH --job-name=bayes_tiny_tiny
 #SBATCH --mail-type=END
 #SBATCH --mail-user=hhs4@nyu.edu
-#SBATCH --output=slurm-output/slurm_%j.out
+#SBATCH --output=slurm-output/slurm_%A_%a.out
 
 index=$SLURM_ARRAY_TASK_ID
 job=$SLURM_JOB_ID
