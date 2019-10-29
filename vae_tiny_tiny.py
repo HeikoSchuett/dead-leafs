@@ -9,7 +9,6 @@ Created on Mon Oct 28 17:13:48 2019
 import sys, getopt
 import os
 
-import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -76,6 +75,38 @@ class dead_leaves_dataset(Dataset):
 
         return sample
     
+
+class minimal(nn.Module):
+    def __init__(self, n_neurons = 10):
+        super(basic, self).__init__()
+        self.fc_enc_1_mu = nn.Linear(imSize[0] * imSize[1], n_neurons)
+        self.fc_enc_1_std = nn.Linear(imSize[0] * imSize[1], n_neurons)
+        self.fc_dec_1 = nn.Linear(n_neurons, imSize[0] * imSize[1])
+        self.init_weights()
+        
+    def encode(self,x):
+        return self.fc_enc_1_mu(x), self.fc_enc_1_std(x)
+        
+    def decode(self,z):
+        return self.fc_dec_1(z)
+    
+    def reparametrize(self,mu,logvar):
+        std = torch.exp(0.5*logvar)
+        eps = torch.randn_like(std)
+        return mu + eps*std
+    
+    def forward(self, x):
+        x = x.view(-1, imSize[0] * imSize[1])
+        mu, logvar = self.encode(x)
+        z = self.reparametrize(mu,logvar)
+        x = self.decode(z)
+        return x, mu, logvar
+    
+    def init_weights(self):
+        self.apply(init_weights_layer_conv)
+        self.apply(init_weights_layer_linear) 
+        nn.init.zeros_(self.fc_enc_2_std.weight)
+
 
 class basic(nn.Module):
     def __init__(self, n_neurons = 10):
@@ -217,7 +248,7 @@ def evaluate(model,root_dir,batchsize=20, device='cpu'):
             accuracies = np.zeros(int(len(d)/batchsize))
             for i,samp in enumerate(dataload):
                 x_tensor = samp['image'].to(device)
-                y_tensor = samp['solution'].to(device)
+                #y_tensor = samp['solution'].to(device)
                 x, mu, logvar = model.forward(x_tensor)
                 l = loss(x_tensor,x,mu,logvar)
                 acc = rmse(x_tensor,x)
@@ -241,6 +272,8 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
     filename = 'vae_tiny_%s' % model_name
     if model_name == 'basic':
         model = basic(n_neurons).to(device)
+    elif model_name == 'min':
+        model = minimal(n_neurons).to(device)
     if not n_neurons==10:
         filename = filename + '_nn%02d' % n_neurons
     if not kernel==3:

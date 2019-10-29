@@ -9,7 +9,6 @@ Neural network training pytorch variant
 import sys, getopt
 import os
 
-import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
