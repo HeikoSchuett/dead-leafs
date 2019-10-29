@@ -529,9 +529,6 @@ class graph:
         while len(nodes)>0:
             n = nodes[-1]
             im = images[-1]
-            if len(nodes)==1 and not silent:
-                k = k+1
-                print('started top-level child %d\n' % k)
             if not silent:
                 print(np.array(p_nodes), end="\r")
             if len(n.children)>0:
