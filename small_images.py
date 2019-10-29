@@ -13,16 +13,18 @@ import tqdm
 nCols = 5
 imSize= [3,3]
 sizes = [1,3]
-exponent = 1
-distance = 1
+exponent = 3
+distance = None
 angle = 0
 abs_angle = 0
 
-test_image = dl.generate_image(exponent,0,sizes,distance,angle,abs_angle,imSize=np.array(imSize),num_colors=nCols,mark_points=False)
+test_image = dl.generate_image(exponent,0,sizes,distance,angle,abs_angle,imSize=np.array(imSize),num_colors=nCols,mark_points=True)
 points = test_image[2]
 same_rect = test_image[3]
+rects = test_image[1]
+im = test_image[0]
 
-g = dl.graph(test_image[0],sizes=sizes,colors=np.linspace(0,1,nCols))
+g = dl.graph(im[:,:,2],sizes=sizes,colors=np.linspace(0,1,nCols),prob=dl.get_default_prob(exponent,sizes))
 
 
 nSamp = 5000
@@ -203,6 +205,10 @@ while len(nodes)>0:
             else:
                 p_nodes[-1] = p_nodes[-1] + p_node
                 p_same[-1] = p_same[-1] + p_node_same
+
+
+
+
 
 
 # test that [1,3] gives same result
