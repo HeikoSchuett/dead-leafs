@@ -275,7 +275,7 @@ def count_positive(root_dir):
 
 def show(model,root_dir,n_image=5):
     d = dead_leaves_dataset(root_dir)
-    dataload = DataLoader(d,batch_size=n_image,shuffle=True,num_workers=1)
+    dataload = DataLoader(d,batch_size=n_image,shuffle=False,num_workers=1)
     samp = next(iter(dataload))
     x_true = samp['image'][:,2]
     x, mu, logvar = model(x_true)
@@ -301,21 +301,6 @@ def show(model,root_dir,n_image=5):
             labelleft=False)
         
         plt.subplot(n_image,3,3*i_image+2)
-        plt.imshow(x[i_image].detach().cpu().numpy(),cmap=plt.gray())
-        plt.tick_params(
-            axis='x',          # changes apply to the x-axis
-            which='both',      # both major and minor ticks are affected
-            bottom=False,      # ticks along the bottom edge are off
-            top=False,         # ticks along the top edge are off
-            labelbottom=False)
-        plt.tick_params(
-            axis='y',          # changes apply to the x-axis
-            which='both',      # both major and minor ticks are affected
-            left=False,      # ticks along the bottom edge are off
-            right=False,         # ticks along the top edge are off
-            labelleft=False)
-        
-        plt.subplot(n_image,3,3*i_image+3)
         plt.imshow(x_reconstruct[i_image].detach().cpu().numpy(),cmap=plt.gray())
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
@@ -329,6 +314,25 @@ def show(model,root_dir,n_image=5):
             left=False,      # ticks along the bottom edge are off
             right=False,         # ticks along the top edge are off
             labelleft=False)
+        if i_image ==0:
+            plt.title('reconstructed')
+        
+        plt.subplot(n_image,3,3*i_image+3)
+        plt.imshow(x[i_image].detach().cpu().numpy(),cmap=plt.gray())
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            labelbottom=False)
+        plt.tick_params(
+            axis='y',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            left=False,      # ticks along the bottom edge are off
+            right=False,         # ticks along the top edge are off
+            labelleft=False)
+        if i_image ==0:
+            plt.title('sampled')
     plt.show()
 
 def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3,alpha = 1/127):
