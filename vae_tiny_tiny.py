@@ -16,6 +16,9 @@ import numpy as np
 
 import tqdm
 
+import matplotlib.pyplot as plt
+        
+
 import DeadLeaf as dl
 
 # for data loading
@@ -66,6 +69,7 @@ class dead_leaves_dataset(Dataset):
                                 self.solutions_df['im_name'].iloc[idx])
         image = io.imread(img_name).astype(np.float32)
         image = np.array(image.transpose([2,0,1]))
+        image = (image-127)/128
         solution = self.solutions_df.iloc[idx, 1]
         solution = solution.astype('float32') #.reshape(-1, 1)
         sample = {'image': image, 'solution': solution}
@@ -78,7 +82,7 @@ class dead_leaves_dataset(Dataset):
 
 class minimal(nn.Module):
     def __init__(self, n_neurons = 10):
-        super(basic, self).__init__()
+        super(minimal, self).__init__()
         self.fc_enc_1_mu = nn.Linear(imSize[0] * imSize[1], n_neurons)
         self.fc_enc_1_std = nn.Linear(imSize[0] * imSize[1], n_neurons)
         self.fc_dec_1 = nn.Linear(n_neurons, imSize[0] * imSize[1])
@@ -104,8 +108,9 @@ class minimal(nn.Module):
     
     def init_weights(self):
         self.apply(init_weights_layer_conv)
-        self.apply(init_weights_layer_linear) 
-        nn.init.zeros_(self.fc_enc_2_std.weight)
+        self.apply(init_weights_layer_linear)
+        nn.init.zeros_(self.fc_enc_1_std.weight)
+        nn.init.constant_(self.fc_enc_1_std.bias,-1)
 
 
 class basic(nn.Module):
@@ -143,10 +148,10 @@ class basic(nn.Module):
         self.apply(init_weights_layer_linear) 
         nn.init.zeros_(self.fc_enc_2_std.weight)
 
-def loss(x_true,x,mu,logvar):
+def loss(x_true,x,mu,logvar,alpha = 0.1):
     MSE = 0.5 * torch.mean((x_true.view(-1,x.shape[1])-x).pow(2))
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return MSE + KLD/x.shape[0]
+    return MSE + alpha*KLD/x.shape[0]
 
 def rmse(x_true,x):
     RMSE = torch.sqrt(torch.mean((x_true.view(-1,x.shape[1])-x).pow(2)))
@@ -181,7 +186,7 @@ def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf, device='cpu'):
         #if i % 25 == 24:
         #    print(l.item())
 
-def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu'):
+def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu',alpha = 1/127):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
     print('starting optimization\n')
@@ -201,7 +206,7 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display
                 #y_tensor = samp['solution'].to(device)
                 optimizer.zero_grad()
                 x, mu, logvar = model.forward(x_tensor)
-                l = loss(x_tensor,x,mu,logvar)
+                l = loss(x_tensor,x,mu,logvar,alpha=alpha)
                 l.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), clip)
                 optimizer.step()
@@ -214,7 +219,7 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display
                 if k>=kMax:
                     return
 
-def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu'):
+def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu',alpha=1/127):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
     print('starting optimization\n')
@@ -224,11 +229,11 @@ def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0
         for i,samp in enumerate(dataload):
             k=k+1
             if i == 0:
-                x_tensor = samp['image'].to(device)
+                x_tensor = samp['image'][:,2].to(device)
                 y_tensor = samp['solution'].to(device)
             optimizer.zero_grad()
-            y_est = model.forward(x_tensor)
-            l = loss(y_est,y_tensor)
+            x, mu, logvar = model.forward(x_tensor)
+            l = loss(x_tensor,x,mu,logvar,alpha=alpha)
             l.backward()
             nn.utils.clip_grad_norm_(model.parameters(), clip)
             optimizer.step()
@@ -239,7 +244,7 @@ def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0
             if k>=kMax:
                 return
 
-def evaluate(model,root_dir,batchsize=20, device='cpu'):
+def evaluate(model,root_dir,batchsize=20, device='cpu',alpha=1/127):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=2)
     with tqdm.tqdm(total=len(d), dynamic_ncols=True,smoothing=0.01) as pbar:
@@ -250,7 +255,7 @@ def evaluate(model,root_dir,batchsize=20, device='cpu'):
                 x_tensor = samp['image'].to(device)
                 #y_tensor = samp['solution'].to(device)
                 x, mu, logvar = model.forward(x_tensor)
-                l = loss(x_tensor,x,mu,logvar)
+                l = loss(x_tensor,x,mu,logvar,alpha=alpha)
                 acc = rmse(x_tensor,x)
                 losses[i]=l.item()
                 accuracies[i] = acc.item()
@@ -268,7 +273,64 @@ def count_positive(root_dir):
         all_samples = all_samples + len(samp['solution'].detach().numpy())
     return pos_samples,all_samples
 
-def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3):
+def show(model,root_dir,n_image=5):
+    d = dead_leaves_dataset(root_dir)
+    dataload = DataLoader(d,batch_size=n_image,shuffle=True,num_workers=1)
+    samp = next(iter(dataload))
+    x_true = samp['image'][:,2]
+    x, mu, logvar = model(x_true)
+    x = x.reshape(-1,5,5)
+    x_reconstruct = model.decode(mu)
+    
+    plt.figure()
+    for i_image in range(n_image):
+        plt.subplot(n_image,3,3*i_image+1)
+        plt.imshow(x_true[i_image],cmap=plt.gray())
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            labelbottom=False)
+        plt.tick_params(
+            axis='y',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            left=False,      # ticks along the bottom edge are off
+            right=False,         # ticks along the top edge are off
+            labelleft=False)
+        
+        plt.subplot(n_image,3,3*i_image+2)
+        plt.imshow(x[i_image].detach().cpu().numpy(),cmap=plt.gray())
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            labelbottom=False)
+        plt.tick_params(
+            axis='y',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            left=False,      # ticks along the bottom edge are off
+            right=False,         # ticks along the top edge are off
+            labelleft=False)
+        
+        plt.subplot(n_image,3,3*i_image+3)
+        plt.imshow(x_reconstruct[i_image].detach().cpu().numpy(),cmap=plt.gray())
+        plt.tick_params(
+            axis='x',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            bottom=False,      # ticks along the bottom edge are off
+            top=False,         # ticks along the top edge are off
+            labelbottom=False)
+        plt.tick_params(
+            axis='y',          # changes apply to the x-axis
+            which='both',      # both major and minor ticks are affected
+            left=False,      # ticks along the bottom edge are off
+            right=False,         # ticks along the top edge are off
+            labelleft=False)
+    plt.show()
+
+def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3,alpha = 1/127):
     filename = 'vae_tiny_%s' % model_name
     if model_name == 'basic':
         model = basic(n_neurons).to(device)
@@ -299,19 +361,19 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         optimizer.param_groups[0]['lr'] = lr
     if action == 'train':
         data_folder = '/Users/heiko/tinytinydeadrects/training'
-        optimize_saved(model,epochs,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=path_loss,kMax=kMax,device=device)
+        optimize_saved(model,epochs,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=path_loss,kMax=kMax,device=device,alpha=alpha)
         torch.save(model.state_dict(),path)
         torch.save(optimizer.state_dict(),path_opt)
         return model
     elif action =='eval': 
         data_folder = '/Users/heiko/tinytinydeadrects/validation'
-        l,acc = evaluate(model,data_folder,batchsize=batchsize,device=device)
+        l,acc = evaluate(model,data_folder,batchsize=batchsize,device=device,alpha=alpha)
         np.save(path_l,np.array(l))
         np.save(path_acc,np.array(acc))
         return acc,l
     elif action =='overtrain':
         data_folder = '/Users/heiko/tinytinydeadrects/training'
-        overtrain(model,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=kMax,device=device)
+        overtrain(model,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=kMax,device=device,alpha=alpha)
     elif action == 'print':
         print(filename)
         if os.path.isfile(path_l):
@@ -321,6 +383,9 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
             print(np.mean(np.load(path_acc)))
         else:
             print('not yet evaluated!')
+    elif action == 'show':
+        data_folder = '/Users/heiko/tinytinydeadrects/training'
+        show(model, data_folder)
     
 
 ### Testing the evaluation for imagenet
@@ -338,9 +403,10 @@ if __name__ == '__main__':
     parser.add_argument("-k","--kMax",type=int,help="maximum number of training steps",default=np.inf)
     parser.add_argument("-t","--time",type=int,help="number of timesteps",default=5)
     parser.add_argument("-n","--n_neurons",type=int,help="number of neurons/features",default=10)
+    parser.add_argument("-a","--alpha",type=float,help="weight for the KL divergence",default=1/127)
     parser.add_argument("--kernel",type=int,help="kernel size",default=3)
-    parser.add_argument("action",help="what to do? [train,eval,overtrain,print,reset]", choices=['train', 'eval', 'overtrain', 'print', 'reset'])
-    parser.add_argument("model_name",help="model to be trained [basic]", choices=['basic'])
+    parser.add_argument("action",help="what to do? [train,eval,overtrain,print,reset,show]", choices=['train', 'eval', 'overtrain', 'print', 'reset', 'show'])
+    parser.add_argument("model_name",help="model to be trained [min,basic]", choices=['min','basic'])
     args=parser.parse_args()
     main(args.model_name,args.action,device=args.device,weight_decay=float(args.weight_decay),epochs=args.epochs,
-         lr = args.learning_rate,kMax=args.kMax,batchsize=args.batch_size,time=args.time,n_neurons=args.n_neurons,kernel=args.kernel)
+         lr = args.learning_rate,kMax=args.kMax,batchsize=args.batch_size,time=args.time,n_neurons=args.n_neurons,kernel=args.kernel,alpha=args.alpha)
