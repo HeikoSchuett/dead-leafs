@@ -86,6 +86,8 @@ class minimal(nn.Module):
         self.fc_enc_1_mu = nn.Linear(imSize[0] * imSize[1], n_neurons)
         self.fc_enc_1_std = nn.Linear(imSize[0] * imSize[1], n_neurons)
         self.fc_dec_1 = nn.Linear(n_neurons, imSize[0] * imSize[1])
+        log_var_final = torch.nn.Parameter(data=torch.tensor(0.))
+        self.register_parameter('log_var_final',log_var_final)
         self.init_weights()
         
     def encode(self,x):
@@ -104,7 +106,7 @@ class minimal(nn.Module):
         mu, logvar = self.encode(x)
         z = self.reparametrize(mu,logvar)
         x = self.decode(z)
-        return x, mu, logvar
+        return x, mu, logvar,self.log_var_final
     
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -148,10 +150,11 @@ class basic(nn.Module):
         self.apply(init_weights_layer_linear) 
         nn.init.zeros_(self.fc_enc_2_std.weight)
 
-def loss(x_true,x,mu,logvar,alpha = 0.1):
-    MSE = 0.5 * torch.mean((x_true.view(-1,x.shape[1])-x).pow(2))
+def loss(x_true, x, mu, logvar, log_var_final,alpha=1):
+    var_final = log_var_final.exp()
+    MSE = 0.5 * torch.sum((x_true.view(-1,x.shape[1])-x).pow(2))/var_final
     KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return MSE + alpha*KLD/x.shape[0]
+    return MSE/x.shape[0] + alpha*KLD/x.shape[0] + 0.5*log_var_final
 
 def rmse(x_true,x):
     RMSE = torch.sqrt(torch.mean((x_true.view(-1,x.shape[1])-x).pow(2)))
@@ -176,8 +179,8 @@ def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf, device='cpu'):
         y_tensor[i]=torch.as_tensor(ynew[0])
         optimizer.zero_grad()
         
-        y_est = model.forward(x_tensor)
-        l = loss(y_est,y_tensor)
+        x, mu, logvar, log_var_final = model.forward(x_tensor)
+        l = loss(x_tensor,x,mu,logvar,log_var_final)
         l.backward()
         nn.utils.clip_grad_norm(model.parameters(), clip)
         optimizer.step()
@@ -186,9 +189,9 @@ def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf, device='cpu'):
         #if i % 25 == 24:
         #    print(l.item())
 
-def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu',alpha = 1/127):
+def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu',alpha = 1):
     d = dead_leaves_dataset(root_dir)
-    dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
+    dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=10)
     print('starting optimization\n')
     if loss_file:
         if os.path.isfile(loss_file):
@@ -205,8 +208,8 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display
                 x_tensor = samp['image'][:,2].to(device)
                 #y_tensor = samp['solution'].to(device)
                 optimizer.zero_grad()
-                x, mu, logvar = model.forward(x_tensor)
-                l = loss(x_tensor,x,mu,logvar,alpha=alpha)
+                x, mu, logvar, log_var_final = model.forward(x_tensor)
+                l = loss(x_tensor,x,mu,logvar,log_var_final,alpha = alpha)
                 l.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), clip)
                 optimizer.step()
@@ -250,15 +253,17 @@ def evaluate(model,root_dir,batchsize=20, device='cpu',alpha=1/127):
     with tqdm.tqdm(total=len(d), dynamic_ncols=True,smoothing=0.01) as pbar:
         with torch.no_grad():
             losses = np.zeros(int(len(d)/batchsize))
-            accuracies = np.zeros(int(len(d)/batchsize))
+            accuracies = np.zeros((int(len(d)/batchsize),2))
             for i,samp in enumerate(dataload):
                 x_tensor = samp['image'].to(device)
                 #y_tensor = samp['solution'].to(device)
-                x, mu, logvar = model.forward(x_tensor)
-                l = loss(x_tensor,x,mu,logvar,alpha=alpha)
+                x, mu, logvar, log_var_final = model.forward(x_tensor)
+                l = loss(x_tensor,x,mu,logvar,log_var_final,alpha=1)
                 acc = rmse(x_tensor,x)
+                x_reconstruct = model.decode(mu)
+                acc2 = rmse(x_tensor,x_reconstruct)
                 losses[i]=l.item()
-                accuracies[i] = acc.item()
+                accuracies[i] = [acc.item(),acc2.item()]
                 pbar.postfix = ',  loss:%0.5f' % np.mean(losses[:(i+1)])
                 pbar.update(batchsize)
     return losses,accuracies
@@ -278,7 +283,7 @@ def show(model,root_dir,n_image=5):
     dataload = DataLoader(d,batch_size=n_image,shuffle=False,num_workers=1)
     samp = next(iter(dataload))
     x_true = samp['image'][:,2]
-    x, mu, logvar = model(x_true)
+    x, mu, logvar, log_var_final = model(x_true)
     x = x.reshape(-1,5,5)
     x_reconstruct = model.decode(mu)
     x_reconstruct = x_reconstruct.reshape(-1,5,5)
@@ -385,7 +390,7 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
             print('negative log-likelihood:')
             print(np.mean(np.load(path_l)))
             print('RMSE:')
-            print(np.mean(np.load(path_acc)))
+            print(np.mean(np.load(path_acc),axis=0))
         else:
             print('not yet evaluated!')
     elif action == 'show':
@@ -408,7 +413,7 @@ if __name__ == '__main__':
     parser.add_argument("-k","--kMax",type=int,help="maximum number of training steps",default=np.inf)
     parser.add_argument("-t","--time",type=int,help="number of timesteps",default=5)
     parser.add_argument("-n","--n_neurons",type=int,help="number of neurons/features",default=10)
-    parser.add_argument("-a","--alpha",type=float,help="weight for the KL divergence",default=1/127)
+    parser.add_argument("-a","--alpha",type=float,help="weight for the KL divergence",default=1)
     parser.add_argument("--kernel",type=int,help="kernel size",default=3)
     parser.add_argument("action",help="what to do? [train,eval,overtrain,print,reset,show]", choices=['train', 'eval', 'overtrain', 'print', 'reset', 'show'])
     parser.add_argument("model_name",help="model to be trained [min,basic]", choices=['min','basic'])
