@@ -691,7 +691,7 @@ def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype
             solution[i] = 1
         else:
             solution[i] = 0
-    return images,solution
+    return images, solution
 
 
 def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
