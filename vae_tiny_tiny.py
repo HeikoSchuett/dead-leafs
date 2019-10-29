@@ -281,6 +281,7 @@ def show(model,root_dir,n_image=5):
     x, mu, logvar = model(x_true)
     x = x.reshape(-1,5,5)
     x_reconstruct = model.decode(mu)
+    x_reconstruct = x_reconstruct.reshape(-1,5,5)
     
     plt.figure()
     for i_image in range(n_image):
