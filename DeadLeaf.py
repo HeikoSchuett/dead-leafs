@@ -133,22 +133,22 @@ def calc_prob_one(sizes = [5,10,15],grid=None,prob=None,dx = 1,dy = 1):
     return p
     #return (p,p1,p2)
 
-def calc_prob_one_grid(sizes = [5,10,15],grid=None,prob=None,dx = 1,dy = 1):
+def calc_prob_one_grid(sizes = [5,10,15],grid=None,prob = None,dx = 1,dy = 1):
     ps = np.zeros((len(dx),len(dy)))
     kx = 0
     for idx in dx:
         ky=0
         for idy in dy:
-            ps[kx,ky] = calc_prob_one(sizes = sizes,grid=grid,prob=prob,dx = idx,dy = idy)
+            ps[kx,ky] = calc_prob_one(sizes = sizes, grid = grid, prob = prob, dx = idx,dy = idy)
             ky += 1
         kx += 1
     return ps
 
-def get_distance_distribution(ps):
+def calc_distance_distribution(ps):
     p_diff = np.zeros_like(ps)
     x = np.arange(ps.shape[0],dtype=np.int)
     y = np.arange(ps.shape[1],dtype=np.int)
-    yy,xx = np.meshgrid(y,x)
+    yy, xx = np.meshgrid(y,x)
     xx = xx.flatten()
     yy = yy.flatten()
     ps = ps.flatten()
@@ -163,6 +163,10 @@ def get_distance_distribution(ps):
             p_diff[x_diff,y_diff] += ps[i]*ps_not_i[j]
     return p_diff
 
+def calc_prob_same_from_p(ps, sizes = [5,10,15],prob = None, grid = None):
+    p_diff = calc_distance_distribution(ps)
+    p_same = calc_prob_one_grid(sizes = sizes, prob = prob, grid = grid, dx = np.arange(ps.shape[0]), dy = np.arange(ps.shape[1]))
+    return np.sum(p_diff*p_same)
 
 def cartesian(arrays, out=None):
     """
