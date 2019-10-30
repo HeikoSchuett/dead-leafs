@@ -491,7 +491,7 @@ def evaluate(model,root_dir,batchsize=20, device='cpu'):
 
 def count_positive(root_dir):
     d = dead_leaves_dataset(root_dir)
-    dataload = DataLoader(d,batch_size=20,shuffle=True,num_workers=6)
+    dataload = DataLoader(d,batch_size=200,shuffle=True,num_workers=6)
     pos_samples = 0
     all_samples = 0
     for i,samp in enumerate(dataload):
