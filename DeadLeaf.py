@@ -611,12 +611,21 @@ class graph:
         return p_node_same,p_node
 
 
-def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None,imSize=np.array([300,300]),num_colors=9,mark_points=True):
+def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None,imSize=np.array([300,300]),num_colors=9,mark_points=True,point_probabilities = None):
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
     if distance is None:
-        positions_im = np.ones((2,2))
-        while np.all(positions_im[0] == positions_im[1]):
-            positions_im = np.random.randint(np.min(imSize),size=(2,2))
+        if point_probabilities is None:
+            point_probabilities = np.ones(imSize)
+        else:
+            point_probabilities = point_probabilities.copy() 
+        point_probabilities = (point_probabilities /np.sum(point_probabilities)).flatten()
+        r1 = np.random.rand()
+        idx1 = np.where(np.cumsum(point_probabilities)>r1)[0][0]
+        point_probabilities[idx1]=0
+        point_probabilities = point_probabilities /np.sum(point_probabilities) 
+        r2 = np.random.rand()
+        idx2 = np.where(np.cumsum(point_probabilities)>r2)[0][0]
+        positions_im = np.unravel_index((idx1,idx2),imSize)
     else:
         if angle and not abs_angle:
             pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
