@@ -8,6 +8,7 @@ Created on Wed Oct 30 10:12:49 2019
 
 import numpy as np
 import torch
+import tqdm
 
 def cartesian(arrays, out=None):
     """
@@ -71,42 +72,49 @@ def calc_prob_one_grid(sizes = [5,10,15],grid=None,prob = None,dx = 1,dy = 1):
         kx += 1
     return ps
 
-def calc_distance_distribution(ps):
-    p_diff = torch.zeros_like(ps)
-    x = np.arange(ps.shape[0],dtype=np.int)
-    y = np.arange(ps.shape[1],dtype=np.int)
+def calc_distance_distribution(ps,weights):
+    ps = ps.flatten()
+    p_tile = ps.repeat((len(ps)),1) 
+    p_tile = p_tile * (1-torch.eye(len(ps)))
+    p_tile = p_tile/torch.sum(p_tile,dim=1).view(-1,1)
+    p_tile = p_tile * ps.view(-1,1)
+    p_same_sum = torch.sum(p_tile * weights)
+    return p_same_sum
+
+
+def pre_compute_weights(p_same):
+    shape = p_same.shape
+    weights = torch.zeros((np.prod(shape),np.prod(shape)))
+    x = np.arange(shape[0],dtype=np.int)
+    y = np.arange(shape[1],dtype=np.int)
     yy, xx = np.meshgrid(y,x)
     xx = xx.flatten()
     yy = yy.flatten()
-    ps = ps.flatten()
-    for i in range(len(ps)):
-        xx_not_i = np.concatenate((xx[:i],xx[(i+1):]))
-        yy_not_i = np.concatenate((yy[:i],yy[(i+1):]))
-        ps_not_i = torch.cat((ps[:i],ps[(i+1):]))
-        ps_not_i = ps_not_i/torch.sum(ps_not_i)
-        x_diff = np.abs(xx_not_i - xx[i])
-        y_diff = np.abs(yy_not_i - yy[i])
-        for j in range(len(ps_not_i)):
-            p_diff[x_diff[j],y_diff[j]] += ps[i]*ps_not_i[j]
-    return p_diff
-
-
+    for i in range(len(ps)*len(ps)):
+        x_diff = np.abs(xx - xx[i])
+        y_diff = np.abs(yy - yy[i])
+        weights[:,i] = p_same[x_diff,y_diff]
+    return weights
 
 ps = torch.ones((5,5))/25
 ps = torch.log(ps)
 ps.requires_grad=True
 
-sizes = np.arange(2,6)
-prob = sizes ** 0
-prob = prob/np.sum(prob)
+sizes = np.arange(2,6,dtype=np.float)
+p_same = np.zeros_like(ps.detach().numpy())
+for iExp in range(0,2):
+    prob = sizes ** -iExp/2
+    prob = prob/np.sum(prob)
+    p_same += calc_prob_one_grid(sizes = sizes, prob = prob, grid = None, dx = np.arange(ps.shape[0]), dy = np.arange(ps.shape[1]))
 
-p_same = torch.Tensor(calc_prob_one_grid(sizes = sizes, prob = prob, grid = None, dx = np.arange(ps.shape[0]), dy = np.arange(ps.shape[1])))
+p_same = torch.Tensor(p_same/2)
+
+weights = pre_compute_weights(p_same)
 
 optimizer = torch.optim.SGD([ps], lr = 1, momentum = 0)
 
-for iUpdate in range(50):
-    p_diff = calc_distance_distribution(torch.exp(ps)/torch.sum(torch.exp(ps)))
-    p_same_sum = torch.sum(p_diff*p_same)
+for iUpdate in tqdm.trange(500):
+    p_same_sum = calc_distance_distribution(torch.exp(ps)/torch.sum(torch.exp(ps)),weights)
     
     loss = 10*(torch.abs(p_same_sum-0.5)) + torch.sum(torch.exp(ps) * ps)
     
@@ -117,4 +125,70 @@ for iUpdate in range(50):
     
     ps.data = ps - torch.logsumexp(ps.flatten(),dim=0)
     
-    optimizer.param_groups[0]['lr'] = 0.9 * optimizer.param_groups[0]['lr']
+    optimizer.param_groups[0]['lr'] =  0.97 * optimizer.param_groups[0]['lr']
+
+np.save('p_same_5.npy', ps.detach().numpy())
+
+
+
+ps = torch.ones((30,30))/900
+ps = torch.log(ps)
+ps.requires_grad=True
+
+imSize=np.array((30,30))
+
+sizes = 5*np.arange(1,7)
+prob = sizes ** 1
+prob = prob/np.sum(prob)
+
+p_same = torch.Tensor(calc_prob_one_grid(sizes = sizes, prob = prob, grid = None, dx = np.arange(ps.shape[0]), dy = np.arange(ps.shape[1])))
+
+optimizer = torch.optim.SGD([ps], lr = 1, momentum = 0)
+
+weights = pre_compute_weights(p_same)
+
+for iUpdate in tqdm.trange(1500):
+    p_same_sum = calc_distance_distribution(torch.exp(ps),weights)
+    loss = 10*(torch.abs(p_same_sum-0.5)) + torch.sum(torch.exp(ps) * ps)
+    
+    loss.backward()
+    
+    optimizer.step()
+    optimizer.zero_grad()
+    
+    ps.data = ps - torch.logsumexp(ps.flatten(),dim=0)
+    if iUpdate > 500:
+        optimizer.param_groups[0]['lr'] = 0.99 * optimizer.param_groups[0]['lr']
+
+np.save('p_same_30.npy', ps.detach().numpy())
+#
+#ps = torch.ones((300,300))/90000
+#ps = torch.log(ps)
+#ps.requires_grad=True
+#
+#imSize=np.array((300,300))
+#
+#sizes = 5*np.arange(1,80,dtype='float')
+#prob = sizes ** 1
+#prob = prob/np.sum(prob)
+#
+#p_same = torch.Tensor(calc_prob_one_grid(sizes = sizes, prob = prob, grid = None, dx = np.arange(ps.shape[0]), dy = np.arange(ps.shape[1])))
+#
+#optimizer = torch.optim.SGD([ps], lr = 1, momentum = 0)
+#
+#weights = pre_compute_weights(p_same)
+#
+#for iUpdate in tqdm.trange(1500):
+#    p_same_sum = calc_distance_distribution(torch.exp(ps),weights)
+#    loss = 10*(torch.abs(p_same_sum-0.5)) + torch.sum(torch.exp(ps) * ps)
+#    
+#    loss.backward()
+#    
+#    optimizer.step()
+#    optimizer.zero_grad()
+#    
+#    ps.data = ps - torch.logsumexp(ps.flatten(),dim=0)
+#    if iUpdate > 500:
+#        optimizer.param_groups[0]['lr'] = 0.99 * optimizer.param_groups[0]['lr']
+#
+#np.save('p_same_300.npy', ps.detach().numpy())
