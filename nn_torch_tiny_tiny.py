@@ -215,9 +215,9 @@ class model_BLT(nn.Module):
                 h2 = F.relu(self.conv1_2(h1)+self.conv2_2(h2))
                 h3 = F.relu(self.conv2_3(h2)+self.conv3_3(h3))
             elif self.T:
-                h1 = F.relu(self.conv0_1(x)+self.conv1_1(h1)+self.conv2_1(h2))
-                h2 = F.relu(self.conv1_2(h1)+self.conv2_2(h2)+self.conv3_2(h3))
-                h3 = F.relu(self.conv2_3(h2)+self.conv3_3(h3))
+                h1 = F.relu(self.conv0_1(x)+self.conv2_1(h2))
+                h2 = F.relu(self.conv1_2(h1)+self.conv3_2(h3))
+                h3 = F.relu(self.conv2_3(h2))
             else:
                 h1 = F.relu(self.conv0_1(x))
                 h2 = F.relu(self.conv1_2(h1))
