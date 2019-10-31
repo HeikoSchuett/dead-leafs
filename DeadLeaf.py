@@ -626,6 +626,7 @@ def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None
         r2 = np.random.rand()
         idx2 = np.where(np.cumsum(point_probabilities)>r2)[0][0]
         positions_im = np.unravel_index((idx1,idx2),imSize)
+        positions_im = np.array(positions_im).T
     else:
         if angle and not abs_angle:
             pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
@@ -737,7 +738,7 @@ def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype
 
 
 def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
-                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57]),mark_points=True):
+                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57]),mark_points=True,point_probabilities=None):
     # saves training images into a folder
     if not os.path.isdir(root_dir):
         os.mkdir(root_dir)
@@ -747,6 +748,10 @@ def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,8
     abs_angle_list = list()
     distance_list = list()
     im_name_list = list()
+    pos_x1_list = list()
+    pos_x2_list = list()
+    pos_y1_list = list()
+    pos_y2_list = list()
     for i in tqdm.trange(N,smoothing=0):
         exponent = exponents[np.random.randint(len(exponents))]
         if distances is None:
@@ -760,7 +765,7 @@ def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,8
                 distance = distancesd[np.random.randint(len(distancesd))]
             else:
                 distance = distances[np.random.randint(len(distances))]
-        im = generate_image(exponent,0,sizes,distance,angle,abs_angle,mark_points=mark_points,imSize=imSize)
+        im = generate_image(exponent,0,sizes,distance,angle,abs_angle,mark_points=mark_points,imSize=imSize,point_probabilities=point_probabilities)
         image = im[0]
         if im[3]:
             solution_list.append(1)
@@ -770,11 +775,15 @@ def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,8
         angle_list.append(angle)
         abs_angle_list.append(abs_angle)
         distance_list.append(distance)
+        pos_x1_list.append(im[2][0][0])
+        pos_x2_list.append(im[2][1][0])
+        pos_y1_list.append(im[2][0][1])
+        pos_y2_list.append(im[2][1][1])
         im_name = 'image%07d.png' % i
         io.imsave(os.path.join(root_dir,im_name), (255*image).astype('uint8'))
         im_name_list.append(im_name)
     df = pd.DataFrame({'im_name':im_name_list,'solution':solution_list,'exponent':exponent_list,'angle':angle_list,
-                       'abs_angle':abs_angle_list,'distance':distance_list})
+                       'abs_angle':abs_angle_list,'distance':distance_list,'pos_x1':pos_x1_list,'pos_x2':pos_x2_list,'pos_y1':pos_y1_list,'pos_y2':pos_y2_list})
     df.to_csv(os.path.join(root_dir,'solution.csv'))
 
 
