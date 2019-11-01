@@ -123,6 +123,8 @@ class basic(nn.Module):
         self.fc_enc_2_std = nn.Linear(2*n_neurons, n_neurons)
         self.fc_dec_2 = nn.Linear(n_neurons,2*n_neurons)
         self.fc_dec_1 = nn.Linear(2*n_neurons, imSize[0] * imSize[1])
+        log_var_final = torch.nn.Parameter(data=torch.tensor(0.))
+        self.register_parameter('log_var_final',log_var_final)
         self.init_weights()
         
     def encode(self,x):
@@ -143,7 +145,7 @@ class basic(nn.Module):
         mu, logvar = self.encode(x)
         z = self.reparametrize(mu,logvar)
         x = self.decode(z)
-        return x, mu, logvar
+        return x, mu, logvar,self.log_var_final
     
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -152,9 +154,19 @@ class basic(nn.Module):
 
 def loss(x_true, x, mu, logvar, log_var_final,alpha=1):
     var_final = log_var_final.exp()
-    MSE = 0.5 * torch.sum((x_true.view(-1,x.shape[1])-x).pow(2))/var_final
-    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    MSE = loss_MSE(x_true,x,var_final)
+    #MSE = 0.5 * torch.sum((x_true.view(-1,x.shape[1])-x).pow(2))/var_final
+    KLD = loss_KLD(logvar,mu)
+    #KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
     return MSE/x.shape[0] + alpha*KLD/x.shape[0] + 0.5*log_var_final
+
+def loss_MSE(x_true,x,var_final):
+    MSE = 0.5 * torch.sum((x_true.view(-1,x.shape[1])-x).pow(2))/var_final
+    return MSE
+
+def loss_KLD(logvar,mu):
+    KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+    return KLD
 
 def rmse(x_true,x):
     RMSE = torch.sqrt(torch.mean((x_true.view(-1,x.shape[1])-x).pow(2)))
@@ -222,7 +234,7 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display
                 if k>=kMax:
                     return
 
-def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu',alpha=1/127):
+def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu',alpha=1):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
     print('starting optimization\n')
@@ -247,26 +259,32 @@ def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0
             if k>=kMax:
                 return
 
-def evaluate(model,root_dir,batchsize=20, device='cpu',alpha=1/127):
+def evaluate(model,root_dir,batchsize=20, device='cpu',alpha=1):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=2)
     with tqdm.tqdm(total=len(d), dynamic_ncols=True,smoothing=0.01) as pbar:
         with torch.no_grad():
             losses = np.zeros(int(len(d)/batchsize))
+            MSEs = np.zeros(int(len(d)/batchsize))
+            KLDs = np.zeros(int(len(d)/batchsize))
             accuracies = np.zeros((int(len(d)/batchsize),2))
             for i,samp in enumerate(dataload):
                 x_tensor = samp['image'].to(device)
                 #y_tensor = samp['solution'].to(device)
                 x, mu, logvar, log_var_final = model.forward(x_tensor)
                 l = loss(x_tensor,x,mu,logvar,log_var_final,alpha=1)
+                MSE = loss_MSE(x_tensor,x,log_var_final.exp())/x.shape[0]
+                KLD = loss_KLD(logvar,mu)/x.shape[0]
                 acc = rmse(x_tensor,x)
                 x_reconstruct = model.decode(mu)
                 acc2 = rmse(x_tensor,x_reconstruct)
                 losses[i]=l.item()
+                KLDs[i]=KLD.item()
+                MSEs[i]=MSE.item()
                 accuracies[i] = [acc.item(),acc2.item()]
                 pbar.postfix = ',  loss:%0.5f' % np.mean(losses[:(i+1)])
                 pbar.update(batchsize)
-    return losses,accuracies
+    return losses,accuracies,MSEs,KLDs
 
 def count_positive(root_dir):
     d = dead_leaves_dataset(root_dir)
@@ -288,7 +306,7 @@ def show(model,root_dir,n_image=5):
     x_reconstruct = model.decode(mu)
     x_reconstruct = x_reconstruct.reshape(-1,5,5)
     
-    plt.figure()
+    plt.figure(figsize=(2.5,5))
     for i_image in range(n_image):
         plt.subplot(n_image,3,3*i_image+1)
         plt.imshow(x_true[i_image],cmap=plt.gray())
@@ -338,9 +356,20 @@ def show(model,root_dir,n_image=5):
             labelleft=False)
         if i_image ==0:
             plt.title('sampled')
+    plt.tight_layout(pad=0.1)
+    plt.figure(figsize=(7.5,2.5))
+    plt.subplot(1,2,1)
+    plt.plot(mu.detach().numpy().T,'k')
+    plt.ylabel('Mean')
+    plt.xlabel('z-dimension')
+    plt.subplot(1,2,2)
+    plt.plot(logvar.detach().numpy().T,'k')
+    plt.ylabel('log Variance')
+    plt.xlabel('z-dimension')
+    plt.tight_layout()
     plt.show()
 
-def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3,alpha = 1/127):
+def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3,alpha = 1):
     filename = 'vae_tiny_%s' % model_name
     if model_name == 'basic':
         model = basic(n_neurons).to(device)
@@ -357,6 +386,8 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
     path_loss= '/Users/heiko/tinytinydeadrects/models/' + filename + '_loss.npy'
     path_l= '/Users/heiko/tinytinydeadrects/models/' + filename + '_l.npy'
     path_acc= '/Users/heiko/tinytinydeadrects/models/' + filename + '_acc.npy'
+    path_MSE= '/Users/heiko/tinytinydeadrects/models/' + filename + '_MSE.npy'
+    path_KLD= '/Users/heiko/tinytinydeadrects/models/' + filename + '_KLD.npy'
     optimizer = torch.optim.Adam(model.parameters(),lr = lr,amsgrad=True,weight_decay=weight_decay)
     #optimizer = torch.optim.SGD(model.parameters(),lr = lr,weight_decay=weight_decay)
     if action == 'reset':
@@ -377,9 +408,11 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         return model
     elif action =='eval': 
         data_folder = '/Users/heiko/tinytinydeadrects/validation'
-        l,acc = evaluate(model,data_folder,batchsize=batchsize,device=device,alpha=alpha)
+        l,acc,MSE,KLD = evaluate(model,data_folder,batchsize=batchsize,device=device,alpha=alpha)
         np.save(path_l,np.array(l))
         np.save(path_acc,np.array(acc))
+        np.save(path_MSE,np.array(MSE))
+        np.save(path_KLD,np.array(KLD))
         return acc,l
     elif action =='overtrain':
         data_folder = '/Users/heiko/tinytinydeadrects/training'
@@ -391,6 +424,10 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
             print(np.mean(np.load(path_l)))
             print('RMSE:')
             print(np.mean(np.load(path_acc),axis=0))
+            print('MSE-loss:')
+            print(np.mean(np.load(path_MSE),axis=0))
+            print('KLD-loss:')
+            print(np.mean(np.load(path_KLD),axis=0))
         else:
             print('not yet evaluated!')
     elif action == 'show':
