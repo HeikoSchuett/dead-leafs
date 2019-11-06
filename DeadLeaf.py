@@ -20,11 +20,11 @@ def get_default_prob(exponent,sizes = default_sizes):
     return (sizes/np.min(sizes)) ** -(exponent/2)
 
 
-def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,fixedC=0,fixedIdx=[],border=False):
+def gen_rect_leaf(im_size = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,fixedC=0,fixedIdx=[],border=False):
     if prob is None:
         prob = np.ones(len(sizes))
-    assert (imSize[0] % grid) ==0,'Image Size not compatible with grid'
-    assert (imSize[1] % grid) ==0,'Image Size not compatible with grid'
+    assert (im_size[0] % grid) ==0,'Image Size not compatible with grid'
+    assert (im_size[1] % grid) ==0,'Image Size not compatible with grid'
     fixedIdx = np.array(fixedIdx)
     sizes = np.array(sizes)
     prob = np.array(prob)
@@ -35,18 +35,18 @@ def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1
 
     # correction for the different size of the possible area
     if len(np.array(sizes).shape) == 1:
-        probx = prob * (sizes+imSize[0]-1)/(np.max(sizes)+imSize[0]-1)
-        proby = prob * (sizes+imSize[1]-1)/(np.max(sizes)+imSize[1]-1)
+        probx = prob * (sizes+im_size[0]-1)/(np.max(sizes)+im_size[0]-1)
+        proby = prob * (sizes+im_size[1]-1)/(np.max(sizes)+im_size[1]-1)
         probx = probx/np.sum(probx)
         proby = proby/np.sum(proby)
         probcx = probx.cumsum()
         probcy = proby.cumsum()
     else:
-        prob = prob * (sizes[:,0]+imSize[0]-1)/(np.max(sizes[:,0])+imSize[0]-1)
-        prob = prob * (sizes[:,1]+imSize[1]-1)/(np.max(sizes[:,1])+imSize[1]-1)
+        prob = prob * (sizes[:,0]+im_size[0]-1)/(np.max(sizes[:,0])+im_size[0]-1)
+        prob = prob * (sizes[:,1]+im_size[1]-1)/(np.max(sizes[:,1])+im_size[1]-1)
         prob = prob/np.sum(prob)
         probc = prob.cumsum()
-    image = np.nan*np.zeros(imSize,dtype='float')
+    image = np.nan*np.zeros(im_size,dtype='float')
     rectList = list()
     while np.any(np.isnan(image)):
         if len(np.array(sizes).shape) == 1:
@@ -62,8 +62,8 @@ def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1
         c = colors[idx_color]
         sizx = sizx/grid
         sizy = sizy/grid
-        idx_x = np.random.randint(1-sizx,imSize[0]/grid)
-        idx_y = np.random.randint(1-sizy,imSize[1]/grid)
+        idx_x = np.random.randint(1-sizx,im_size[0]/grid)
+        idx_y = np.random.randint(1-sizy,im_size[1]/grid)
         rectList.append([grid*idx_x,grid*idx_y,grid*sizx,grid*sizy,idx_color])
         image[int(grid*max(idx_x,0)):int(grid*max(0,idx_x+sizx)),int(grid*max(idx_y,0)):int(grid*max(0,idx_y+sizy))] = c
     rectList=np.array(rectList,dtype=np.int16)
@@ -94,19 +94,19 @@ def gen_rect_leaf(imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1
             sizy = rectList[len(rectList)-i-1,3]
             if idx_x >= 0:
                 image[int(idx_x),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = 5
-            if (idx_x+sizx) <= imSize[0]:
+            if (idx_x+sizx) <= im_size[0]:
                 image[int((idx_x+sizx)-1),int(max(idx_y,0)):int(idx_y+sizy)] = 5
             if idx_y >= 0:
                 image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y)] = 5
-            if (idx_y+sizy) <= imSize[1]:
+            if (idx_y+sizy) <= im_size[1]:
                 image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y+sizy)-1] = 5
 
     if border:
         b = image==5
     if noiseType=='norm':
-        image = image+noise*np.random.randn(imSize[0],imSize[1])
+        image = image+noise*np.random.randn(im_size[0],im_size[1])
     elif noiseType == 'uniform':
-        image = image+noise*2*(np.random.rand(imSize[0],imSize[1])-.5)
+        image = image+noise*2*(np.random.rand(im_size[0],im_size[1])-.5)
     image[image<0] = 0
     if border:
         image[image>1] = 1
@@ -216,7 +216,7 @@ def fast_rect_conv(im,rect_size):
 
 
 def show_test_positions():
-    imSize = np.array((300,300))
+    im_size = np.array((300,300))
     distances = [5,10,20,40,80]
     distancesd = [4,7,14,28,57]
     image = np.ones((300,300,3))
@@ -242,8 +242,8 @@ def show_test_positions():
                 positions = pos
                 positions = np.floor(positions)
                 positions_im = np.zeros_like(positions)
-                positions_im[:,1] = np.ceil(imSize/2)+positions[:,0]
-                positions_im[:,0] = np.ceil(imSize/2)-positions[:,1]-1
+                positions_im[:,1] = np.ceil(im_size/2)+positions[:,0]
+                positions_im[:,0] = np.ceil(im_size/2)-positions[:,1]-1
                 if distance>20:
                     for ix in range(1,xlen+1):
                         for ip in range(2):
@@ -261,37 +261,37 @@ def show_test_positions():
     return image
 
 class dlMovie:
-    def __init__(self,imSize = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,border=False):
+    def __init__(self,im_size = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 1,noise = 0,noiseType='norm',prob=None,border=False):
         if prob is None:
             self.prob = np.ones(len(sizes))
         else:
             self.prob = prob
-        assert (imSize[0] % grid) ==0,'Image Size not compatible with grid'
-        assert (imSize[1] % grid) ==0,'Image Size not compatible with grid'
+        assert (im_size[0] % grid) ==0,'Image Size not compatible with grid'
+        assert (im_size[1] % grid) ==0,'Image Size not compatible with grid'
         assert np.all(np.array(sizes) % grid ==0),'Patch sizes not compatible with grid'
         assert noise>=0, 'noise is the standard deviation and thus should be >=0'
         assert np.all(self.prob>0), 'probabilities for shapes must be >0'
         assert len(self.prob) == len(sizes), 'probabilities and sizes should have equal length'
-        self.imSize = imSize
+        self.im_size = im_size
         self.sizes = np.array(sizes)
         self.colors = colors
         self.grid = grid
         self.noise = noise
         self.noiseType = noiseType
         self.border = border
-        self.image = np.nan*np.zeros(imSize,dtype='float')
+        self.image = np.nan*np.zeros(im_size,dtype='float')
         self.rectList=np.zeros((0,5),dtype=np.int16)
         # correction for the different size of the possible area
         if len(np.array(sizes).shape) == 1:
-            probx = self.prob * (self.sizes+imSize[0])/(np.max(self.sizes)+imSize[0])
-            proby = self.prob * (self.sizes+imSize[1])/(np.max(self.sizes)+imSize[1])
+            probx = self.prob * (self.sizes+im_size[0])/(np.max(self.sizes)+im_size[0])
+            proby = self.prob * (self.sizes+im_size[1])/(np.max(self.sizes)+im_size[1])
             probx = probx/np.sum(probx)
             proby = proby/np.sum(proby)
             self.probcx = probx.cumsum()
             self.probcy = proby.cumsum()
         else:
-            prob = prob * (sizes[:,0]+imSize[0])/(np.max(sizes[:,0])+imSize[0])
-            prob = prob * (sizes[:,1]+imSize[1])/(np.max(sizes[:,1])+imSize[1])
+            prob = prob * (sizes[:,0]+im_size[0])/(np.max(sizes[:,0])+im_size[0])
+            prob = prob * (sizes[:,1]+im_size[1])/(np.max(sizes[:,1])+im_size[1])
             prob = prob/np.sum(prob)
             self.probc = prob.cumsum()
     def add_leaf(self):
@@ -308,18 +308,18 @@ class dlMovie:
         c = self.colors[idx_color]
         sizx = sizx/self.grid
         sizy = sizy/self.grid
-        idx_x = np.random.randint(1-sizx,self.imSize[0]/self.grid)
-        idx_y = np.random.randint(1-sizy,self.imSize[1]/self.grid)
+        idx_x = np.random.randint(1-sizx,self.im_size[0]/self.grid)
+        idx_y = np.random.randint(1-sizy,self.im_size[1]/self.grid)
         self.rectList=np.append(self.rectList,[[self.grid*idx_x,self.grid*idx_y,self.grid*sizx,self.grid*sizy,idx_color]], axis=0)
         self.image[int(self.grid*max(idx_x,0)):int(self.grid*max(0,idx_x+sizx)),int(self.grid*max(idx_y,0)):int(self.grid*max(0,idx_y+sizy))] = c
         if self.border:
             if idx_x >= 0:
                 self.image[int(idx_x),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = 5
-            if (idx_x+sizx) <= self.imSize[0]:
+            if (idx_x+sizx) <= self.im_size[0]:
                 self.image[int((idx_x+sizx)-1),int(max(idx_y,0)):int(idx_y+sizy)] = 5
             if idx_y >= 0:
                 self.image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y)] = 5
-            if (idx_y+sizy) <= self.imSize[1]:
+            if (idx_y+sizy) <= self.im_size[1]:
                 self.image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y+sizy)-1] = 5
     def get_image(self):
         return self.image
@@ -425,7 +425,7 @@ class graph:
             image[image[:,:,0]!=image[:,:,1],:] =np.nan
             image = np.mean(image,axis=2)
         self.image = image
-        imSize = self.image.shape
+        im_size = self.image.shape
         if prob is None:
             self.prob = np.ones(len(sizes))
         else:
@@ -438,8 +438,8 @@ class graph:
         else:
             self.sizes = np.array(sizes)
         self.colors = colors
-        self.prob = self.prob * (self.sizes[:,0]+imSize[0]-1)/(np.max(self.sizes[:,0])+imSize[0]-1)
-        self.prob = self.prob * (self.sizes[:,1]+imSize[1]-1)/(np.max(self.sizes[:,1])+imSize[1]-1)
+        self.prob = self.prob * (self.sizes[:,0]+im_size[0]-1)/(np.max(self.sizes[:,0])+im_size[0]-1)
+        self.prob = self.prob * (self.sizes[:,1]+im_size[1]-1)/(np.max(self.sizes[:,1])+im_size[1]-1)
         self.prob = self.prob/np.sum(self.prob)
         self.probc = self.prob.cumsum()
 
@@ -611,40 +611,25 @@ class graph:
         return p_node_same,p_node
 
 
-def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None,imSize=np.array([300,300]),num_colors=9,mark_points=True,point_probabilities = None):
+def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None,im_size=np.array([300,300]),num_colors=9,mark_points=True,point_probabilities = None):
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
-    if distance is None:
-        if point_probabilities is None:
-            point_probabilities = np.ones(imSize)
-        else:
-            point_probabilities = point_probabilities.copy() 
-        point_probabilities = (point_probabilities /np.sum(point_probabilities)).flatten()
-        r1 = np.random.rand()
-        idx1 = np.where(np.cumsum(point_probabilities)>r1)[0][0]
-        point_probabilities[idx1]=0
-        point_probabilities = point_probabilities /np.sum(point_probabilities) 
-        r2 = np.random.rand()
-        idx2 = np.where(np.cumsum(point_probabilities)>r2)[0][0]
-        positions_im = np.unravel_index((idx1,idx2),imSize)
-        positions_im = np.array(positions_im).T
-    else:
-        if angle and not abs_angle:
-            pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
-        elif angle and abs_angle:
-            pos = [[-distance/2,distance/2],[distance/2,-distance/2]]
-        elif not angle and not abs_angle:
-            pos = [[-distance/2,0],[distance/2,0]]
-        elif not angle and abs_angle:
-            pos = [[0,-distance/2],[0,distance/2]]
-        pos = np.floor(np.array(pos))
+    if angle and not abs_angle:
+        pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
+    elif angle and abs_angle:
+        pos = [[-distance/2,distance/2],[distance/2,-distance/2]]
+    elif not angle and not abs_angle:
+        pos = [[-distance/2,0],[distance/2,0]]
+    elif not angle and abs_angle:
+        pos = [[0,-distance/2],[0,distance/2]]
+    pos = np.floor(np.array(pos))
 
-        positions = pos
-        positions = np.floor(positions)
-        positions_im = np.zeros_like(positions)
-        positions_im[:,1] = np.ceil(imSize/2)+positions[:,0]
-        positions_im[:,0] = np.ceil(imSize/2)-positions[:,1]-1
+    positions = pos
+    positions = np.floor(positions)
+    positions_im = np.zeros_like(positions)
+    positions_im[:,1] = np.ceil(im_size/2)+positions[:,0]
+    positions_im[:,0] = np.ceil(im_size/2)-positions[:,1]-1
     col = np.random.randint(num_colors)
-    im = gen_rect_leaf(imSize,
+    im = gen_rect_leaf(im_size,
           sizes=sizes,
           prob = prob,
           grid=1,
@@ -661,10 +646,75 @@ def generate_image(exponent,border,sizes,distance=None,angle=None,abs_angle=None
     return (image,im[1],positions_im,im[2],col)
 
 
-def generate_image_from_rects(imSize,rectList,border=False,colors=None):
+def generate_image_point(exponent,border,sizes,im_size=np.array([300,300]),num_colors=9,mark_points=True,point_probabilities = None):
+    prob = (sizes/np.min(sizes)) ** -(exponent/2)
+    if point_probabilities is None:
+        point_probabilities = np.ones(im_size)
+    else:
+        point_probabilities = point_probabilities.copy() 
+    point_probabilities = (point_probabilities /np.sum(point_probabilities)).flatten()
+    r1 = np.random.rand()
+    idx1 = np.where(np.cumsum(point_probabilities)>r1)[0][0]
+    point_probabilities[idx1]=0
+    point_probabilities = point_probabilities /np.sum(point_probabilities) 
+    r2 = np.random.rand()
+    idx2 = np.where(np.cumsum(point_probabilities)>r2)[0][0]
+    positions_im = np.unravel_index((idx1,idx2),im_size)
+    positions_im = np.array(positions_im).T
+    
+    col = np.random.randint(num_colors)
+    im = gen_rect_leaf(im_size,
+          sizes=sizes,
+          prob = prob,
+          grid=1,
+          colors=np.linspace(0,1,num_colors),
+          fixedIdx = positions_im,
+          fixedC=col,
+          border=border)
+    image = im[0]
+    image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
+    image[im[0]==5,:] = [.5,.5,1]
+    if mark_points:
+        image[np.asarray(positions_im,dtype=np.int)[:,0],
+              np.asarray(positions_im,dtype=np.int)[:,1],:2] = [1,0]
+    return (image,im[1],positions_im,im[2],col)
+        
+def generate_image_dist(exponent, border, sizes, im_size=np.array([300,300]),
+                         num_colors=9, mark_points=True, dist_probabilities = None):
+    im_size = np.array(im_size)
+    prob = (sizes/np.min(sizes)) ** -(exponent/2)
+    if dist_probabilities is None:
+        dist_probabilities = np.ones(im_size)
+    dist_probabilities = (dist_probabilities /np.sum(dist_probabilities)).flatten()
+    r = np.random.rand()
+    idx = np.where(np.cumsum(dist_probabilities)>r)[0][0]
+    dx, dy = np.unravel_index(idx, im_size)
+    select_size = im_size - np.array((dx,dy))
+    x = np.random.randint(select_size[0])
+    y = np.random.randint(select_size[1])
+    positions_im = np.array([[x,y],[x+dx,y+dy]])
+    
+    col = np.random.randint(num_colors)
+    im = gen_rect_leaf(im_size,
+          sizes=sizes,
+          prob = prob,
+          grid=1,
+          colors=np.linspace(0,1,num_colors),
+          fixedIdx = positions_im,
+          fixedC=col,
+          border=border)
+    image = im[0]
+    image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
+    image[im[0]==5,:] = [.5,.5,1]
+    if mark_points:
+        image[np.asarray(positions_im,dtype=np.int)[:,0],
+              np.asarray(positions_im,dtype=np.int)[:,1],:2] = [1,0]
+    return (image,im[1],positions_im,im[2],col)
+
+def generate_image_from_rects(im_size,rectList,border=False,colors=None):
     if colors is None:
         colors = np.arange(np.max(rectList[:,4])+1)/np.max(rectList[:,4])
-    image = np.zeros(imSize)
+    image = np.zeros(im_size)
     for i in range(len(rectList)):
         image[int(max(rectList[len(rectList)-i-1,0],0)):int(max(0,rectList[len(rectList)-i-1,0]+rectList[len(rectList)-i-1,2])),
               int(max(rectList[len(rectList)-i-1,1],0)):int(max(0,rectList[len(rectList)-i-1,1]+rectList[len(rectList)-i-1,3]))] = colors[int(rectList[len(rectList)-i-1,4])]
@@ -675,11 +725,11 @@ def generate_image_from_rects(imSize,rectList,border=False,colors=None):
             sizy = rectList[len(rectList)-i-1,3]
             if idx_x >= 0:
                 image[int(idx_x),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = 5
-            if (idx_x+sizx) <= imSize[0]:
+            if (idx_x+sizx) <= im_size[0]:
                 image[int((idx_x+sizx)-1),int(max(idx_y,0)):int(idx_y+sizy)] = 5
             if idx_y >= 0:
                 image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y)] = 5
-            if (idx_y+sizy) <= imSize[1]:
+            if (idx_y+sizy) <= im_size[1]:
                 image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y+sizy)-1] = 5
     image3 = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
     image3[image==5,:] = [.5,.5,1]
@@ -710,10 +760,10 @@ def show_frozen_image(im_folder='imagesFrozen/',exponent=1,num_colors=9,dist=40,
     return im
 
 
-def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
+def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),im_size=np.array([300,300]),
                          distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57]),mark_points=True):
     # creates training images on the fly
-    images = np.zeros((N,imSize[0],imSize[1],3))
+    images = np.zeros((N,im_size[0],im_size[1],3))
     solution = np.zeros((N))
     for i in range(N):
         exponent = exponents[np.random.randint(len(exponents))]
@@ -728,7 +778,7 @@ def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype
                 distance = distancesd[np.random.randint(len(distancesd))]
             else:
                 distance = distances[np.random.randint(len(distances))]
-        im = generate_image(exponent,0,sizes,distance,angle,abs_angle,mark_points=mark_points,imSize=imSize)
+        im = generate_image(exponent,0,sizes,distance,angle,abs_angle,mark_points=mark_points,im_size=im_size)
         images[i] = im[0]
         if im[3]:
             solution[i] = 1
@@ -737,8 +787,14 @@ def create_training_data(N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype
     return images, solution
 
 
-def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,80,dtype='float'),imSize=np.array([300,300]),
-                         distances=np.array([5,10,20,40,80]),distancesd=np.array([4,7,14,28,57]),mark_points=True,point_probabilities=None):
+def save_training_data(root_dir, N, exponents=np.arange(1,6),
+                       sizes=5*np.arange(1,80,dtype='float'),
+                       im_size=np.array([300,300]),
+                       distances=None,
+                       distancesd=None,
+                       mark_points=True,
+                       point_probabilities=None,
+                       dist_probabilities=None):
     # saves training images into a folder
     if not os.path.isdir(root_dir):
         os.mkdir(root_dir)
@@ -754,18 +810,35 @@ def save_training_data(root_dir,N,exponents=np.arange(1,6),sizes=5*np.arange(1,8
     pos_y2_list = list()
     for i in tqdm.trange(N,smoothing=0):
         exponent = exponents[np.random.randint(len(exponents))]
-        if distances is None:
+        if not point_probabilities is None:
             distance = None
             angle = None
             abs_angle = None
-        else:
+            im = generate_image_point(exponent,0,sizes,
+                                      mark_points=mark_points,
+                                      im_size=im_size,
+                                      point_probabilities=point_probabilities)
+        elif not dist_probabilities is None:
+            distance = None
+            angle = None
+            abs_angle = None
+            im = generate_image_dist(exponent,0,sizes,
+                                      mark_points=mark_points,
+                                      im_size=im_size,
+                                      dist_probabilities=dist_probabilities)
+        elif not distances is None:
             angle = np.random.randint(2)
             abs_angle = np.random.randint(2)
             if angle:
                 distance = distancesd[np.random.randint(len(distancesd))]
             else:
                 distance = distances[np.random.randint(len(distances))]
-        im = generate_image(exponent,0,sizes,distance,angle,abs_angle,mark_points=mark_points,imSize=imSize,point_probabilities=point_probabilities)
+            im = generate_image(exponent,0,sizes,
+                                distance,angle,abs_angle,
+                                mark_points=mark_points,
+                                im_size=im_size)
+        else:
+            raise ValueError('You have to specify the point distributions somehow!')
         image = im[0]
         if im[3]:
             solution_list.append(1)

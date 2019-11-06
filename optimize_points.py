@@ -103,7 +103,7 @@ ps.requires_grad=True
 sizes = np.arange(2,6,dtype=np.float)
 p_same = np.zeros_like(ps.detach().numpy())
 for iExp in range(0,2):
-    prob = sizes ** -iExp/2
+    prob = sizes ** (-iExp/2)
     prob = prob/np.sum(prob)
     p_same += calc_prob_one_grid(sizes = sizes, prob = prob, grid = None, dx = np.arange(ps.shape[0]), dy = np.arange(ps.shape[1]))
 
@@ -138,7 +138,7 @@ ps.requires_grad=True
 imSize=np.array((30,30))
 
 sizes = 5*np.arange(1,7)
-prob = sizes ** 1
+prob = sizes ** (-1/2)
 prob = prob/np.sum(prob)
 
 p_same = torch.Tensor(calc_prob_one_grid(sizes = sizes, prob = prob, grid = None, dx = np.arange(ps.shape[0]), dy = np.arange(ps.shape[1])))
