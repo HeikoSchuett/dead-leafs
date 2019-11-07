@@ -565,9 +565,9 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         print(filename)
         if os.path.isfile(path_l):
             print('negative log-likelihood:')
-            print(np.mean(np.load(path_l)))
+            print('%.6f' % np.mean(np.load(path_l)))
             print('accuracy:')
-            print(np.mean(np.load(path_acc)))
+            print('%.4f %%' % (100*np.mean(np.load(path_acc))))
         else:
             print('not yet evaluated!')
     
