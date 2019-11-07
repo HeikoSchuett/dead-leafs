@@ -42,17 +42,15 @@ def init_weights_layer_linear(layer):
     if type(layer) == nn.Linear:
         torch.nn.init.xavier_uniform_(layer.weight, gain=0.1*nn.init.calculate_gain('relu'))
         layer.bias.data.fill_(0)
-        
+
 def activity_one_regularizer(activities):
     return torch.mean((activities-1) * (activities-1))
-          
+
 class model_min_class(nn.Module):
     def __init__(self):
         super(model_min_class, self).__init__()
-        self.norm = nn.InstanceNorm2d(3)
         self.fc = nn.Linear(3 * imSize[0] * imSize[1], 1)
     def forward(self, x):
-        x = self.norm(x)
         x = x.view(-1, 3 * imSize[0] * imSize[1])
         x = self.fc(x)
         return x
@@ -125,7 +123,7 @@ class model_residual(nn.Module):
     def init_weights(self):
         self.apply(init_weights_layer_conv)
         self.apply(init_weights_layer_linear)
-       
+
 class model2_class(nn.Module):
     def __init__(self):
         super(model2_class, self).__init__()
@@ -228,7 +226,7 @@ class model_BLT(nn.Module):
     def init_weights(self):
         self.apply(init_weights_layer_conv)
         self.apply(init_weights_layer_linear)
-        
+
 
 class model_recurrent(nn.Module):
     def __init__(self,n_rep=20,n_neurons=10000):
@@ -268,7 +266,8 @@ def get_shifted_values(feat,neighbors):
             output[:,:,int(-neighbors[iNeigh,0]):,int(-neighbors[iNeigh,1]):] = feat[:,:,:(feat.shape[2]-int(-neighbors[iNeigh,0])),:(feat.shape[3]-int(-neighbors[iNeigh,1]))]
         out.append(output)
     output = torch.cat(out,0).reshape(neighbors.shape[0],feat.shape[0],feat.shape[1],feat.shape[2],feat.shape[3])
-    return output  
+    return output
+
 
 class model_pred_like(nn.Module):
     def __init__(self,n_rep=5,neighbors=np.array([[0,-1],[0,1],[1,0],[-1,0]])):
@@ -285,12 +284,10 @@ class model_pred_like(nn.Module):
         self.pool2 = nn.MaxPool2d(6, 6)
         self.fc1 = nn.Linear(10, 10)
         self.fc2 = nn.Linear(10, 1)
-        
         self.logC1 = torch.nn.Parameter(torch.Tensor(-2*np.ones((self.neighbors.shape[0],10))))
         self.register_parameter('logC_1', self.logC1)
         self.logC2 = torch.nn.Parameter(torch.Tensor(-2*np.ones((self.neighbors.shape[0],10))))
         self.register_parameter('logC_2', self.logC2)
-        
         self.n_rep = n_rep
     def forward(self, x):
         x = self.norm(x)
@@ -316,7 +313,6 @@ class model_pred_like(nn.Module):
             prec1 = prec1in + torch.sum(neighPrec1,0)
             value1 = (prec1in*value1in + torch.sum(neighPrec1*neighValues1,0))/prec1
             out1 = self.pool(value1)
-            
             value2in = F.relu(self.conv2value(out1))
             prec2in = F.relu(self.conv2prec(out1))+ epsilon
             neigh2 = F.relu(self.conv2neigh(out1)).unsqueeze(0).permute((2,1,0,3,4))
@@ -333,10 +329,6 @@ class model_pred_like(nn.Module):
     def init_weights(self):
         self.apply(init_weights_layer_conv)
         self.apply(init_weights_layer_linear)
-
-
-
-
 
 
 ## Dataset definition (for reading from disk)
@@ -371,7 +363,7 @@ class dead_leaves_dataset(Dataset):
         return sample
 
 ## Function definitions
-        
+
 def loss(x,y):
     x = torch.flatten(x)
     x2 = -torch.logsumexp(torch.stack((x,torch.zeros_like(x))),0)
@@ -381,14 +373,15 @@ def loss(x,y):
     l2 = -torch.mean(torch.flatten(1-y)*x2)
     return l1+l2
 
+
 def accuracy(x,y):
     x = torch.gt(x,0.5).float().flatten()
     return torch.mean(torch.eq(x,y.flatten()).float())
 
+
 def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf, device='cpu'):
     # optimizer:
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum)
-    
     print('generating first data')
     x,y = dl.create_training_data(Nkeep)
     x_tensor = torch.tensor(x.transpose((0,3,1,2)),dtype=torch.float32)
@@ -401,7 +394,6 @@ def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf, device='cpu'):
         x_tensor[i]=torch.as_tensor(xnew[0].transpose((2,0,1)))
         y_tensor[i]=torch.as_tensor(ynew[0])
         optimizer.zero_grad()
-        
         y_est = model.forward(x_tensor)
         l = loss(y_est,y_tensor)
         l.backward()
@@ -411,6 +403,7 @@ def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf, device='cpu'):
         pbar.update()
         #if i % 25 == 24:
         #    print(l.item())
+
 
 def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu'):
     d = dead_leaves_dataset(root_dir)
@@ -445,6 +438,7 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_di
                 if k>=kMax:
                     return
 
+
 def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu'):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
@@ -470,6 +464,7 @@ def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0
             if k>=kMax:
                 return
 
+
 def evaluate(model,root_dir,batchsize=20, device='cpu'):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=2)
@@ -489,6 +484,7 @@ def evaluate(model,root_dir,batchsize=20, device='cpu'):
                 pbar.update(batchsize)
     return losses,accuracies
 
+
 def count_positive(root_dir):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=200,shuffle=True,num_workers=6)
@@ -498,6 +494,7 @@ def count_positive(root_dir):
         pos_samples = pos_samples + np.sum(samp['solution'].detach().numpy())
         all_samples = all_samples + len(samp['solution'].detach().numpy())
     return pos_samples,all_samples
+
 
 def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3):
     filename = 'model_tiny_%s' % model_name
@@ -543,7 +540,7 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         os.remove(path_l)
         os.remove(path_acc)
     if os.path.isfile(path):
-        model.load_state_dict(torch.load(path))    
+        model.load_state_dict(torch.load(path))
         optimizer.load_state_dict(torch.load(path_opt))
         optimizer.param_groups[0]['lr'] = lr
     if action == 'train':
@@ -552,7 +549,7 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         torch.save(model.state_dict(),path)
         torch.save(optimizer.state_dict(),path_opt)
         return model
-    elif action =='eval': 
+    elif action =='eval':
         data_folder = '/Users/heiko/tinytinydeadrects/validation'
         l,acc = evaluate(model,data_folder,batchsize=batchsize,device=device)
         np.save(path_l,np.array(l))
@@ -570,7 +567,7 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
             print(np.mean(np.load(path_acc)))
         else:
             print('not yet evaluated!')
-    
+
 
 ### Testing the evaluation for imagenet
 #mTest = minimumNet().to(device)
