@@ -13,8 +13,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-
+import datetime
 import tqdm
+import matplotlib.pyplot as plt
+import pathlib
 
 import DeadLeaf as dl
 
@@ -405,7 +407,10 @@ def optimize(model,N,lr=0.01,Nkeep=100,momentum=0,clip=np.inf, device='cpu'):
         #    print(l.item())
 
 
-def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu'):
+def optimize_saved(model, N, root_dir, optimizer,
+                   batchsize=20, clip=np.inf, smooth_display=0.9,
+                   loss_file=None, kMax=np.inf, smooth_l = 0, device='cpu',
+                   val_dir=None, check_dir=None, filename=None):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
     print('starting optimization\n')
@@ -414,7 +419,7 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_di
             losses = np.load(loss_file)
         else:
             losses = np.array([])
-    with tqdm.tqdm(total=min(N*len(d),kMax*batchsize), dynamic_ncols=True,smoothing=0.01) as pbar:
+    with tqdm.tqdm(total=min(N*len(d),kMax*batchsize*N), dynamic_ncols=True,smoothing=0.01) as pbar:
         k0 = len(losses)
         k = k0
         losses = np.concatenate((losses,np.zeros(int(N*len(d)/batchsize))))
@@ -436,7 +441,9 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_di
                 if loss_file and not (k%25):
                     np.save(loss_file,losses)
                 if k>=kMax:
-                    return
+                    break
+            if (check_dir is not None) and (val_dir is not None) and (filename is not None):
+                save_checkpoint(model, val_dir, filename, check_dir, batchsize=batchsize, device=device)
 
 
 def overtrain(model,root_dir,optimizer,batchsize=20,clip=np.inf,smooth_display=0.9,loss_file=None,kMax=np.inf,smooth_l = 0, device='cpu'):
@@ -482,7 +489,7 @@ def evaluate(model,root_dir,batchsize=20, device='cpu'):
                 accuracies[i] = acc.item()
                 pbar.postfix = ',  loss:%0.5f' % np.mean(losses[:(i+1)])
                 pbar.update(batchsize)
-    return losses,accuracies
+    return losses, accuracies
 
 
 def count_positive(root_dir):
@@ -494,6 +501,46 @@ def count_positive(root_dir):
         pos_samples = pos_samples + np.sum(samp['solution'].detach().numpy())
         all_samples = all_samples + len(samp['solution'].detach().numpy())
     return pos_samples,all_samples
+
+
+def save_checkpoint(model, val_dir, filename, check_dir, batchsize=20, device='cpu'):
+    losses, accuracies = evaluate(model,
+                                  val_dir,
+                                  batchsize=batchsize,
+                                  device=device)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = filename + '_' + timestamp
+    path= check_dir + filename + '.pt'
+    path_l= check_dir + filename + '_l.npy'
+    path_acc= check_dir + filename + '_acc.npy'
+    torch.save(model.state_dict(),path)
+    np.save(path_l,np.array(losses))
+    np.save(path_acc,np.array(accuracies))
+
+
+def plot_loss(check_dir, filename, path_loss, smooth_n=25):
+    losses = np.load(path_loss)
+    val_loss = []
+    val_acc = []
+    timestamp = []
+    for p in pathlib.Path(check_dir).glob(filename+'*'+'l.npy'):
+        val_loss.append(np.mean(np.load(p)))
+        timestamp.append(int(p.name.split('_')[3])*1000000+int(p.name.split('_')[4]))
+    order = np.argsort(timestamp)
+    val_loss = np.array(val_loss)[order]
+    timestamp = []
+    for p in pathlib.Path(check_dir).glob(filename+'*'+'acc.npy'):
+        val_acc.append(np.mean(np.load(p)))
+        timestamp.append(int(p.name.split('_')[3])*1000000+int(p.name.split('_')[4]))
+    order = np.argsort(timestamp)
+    val_acc = np.array(val_acc)[order]
+    x_val = np.linspace(len(losses)/len(val_loss),len(losses)-smooth_n,len(val_loss))
+    plt.figure()
+    plt.plot(np.convolve(losses,np.ones(smooth_n)/smooth_n,'valid'))
+    plt.plot(x_val,val_loss,'k.-')
+    plt.figure()
+    plt.plot(val_acc,'k.-')
+    plt.show()
 
 
 def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,kMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3):
@@ -526,6 +573,8 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         filename = filename + '_k%02d' % kernel
     if not time==5:
         filename = filename + '_%02d' % time
+    check_dir = '/Users/heiko/tinytinydeadrects/check_points/'
+    val_dir = '/Users/heiko/tinytinydeadrects/validation'
     path= '/Users/heiko/tinytinydeadrects/models/' + filename + '.pt'
     path_opt= '/Users/heiko/tinytinydeadrects/models/' + filename + '_opt.pt'
     path_loss= '/Users/heiko/tinytinydeadrects/models/' + filename + '_loss.npy'
@@ -545,7 +594,10 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         optimizer.param_groups[0]['lr'] = lr
     if action == 'train':
         data_folder = '/Users/heiko/tinytinydeadrects/training'
-        optimize_saved(model,epochs,data_folder,optimizer,batchsize=batchsize,clip=np.inf,smooth_display=0.9,loss_file=path_loss,kMax=kMax,device=device)
+        optimize_saved(model,epochs,data_folder,optimizer,batchsize=batchsize,
+                       clip=np.inf,smooth_display=0.9,loss_file=path_loss,
+                       kMax=kMax,device=device,
+                       check_dir=check_dir, val_dir=val_dir, filename=filename)
         torch.save(model.state_dict(),path)
         torch.save(optimizer.state_dict(),path_opt)
         return model
@@ -567,6 +619,8 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
             print('%.4f %%' % (100*np.mean(np.load(path_acc))))
         else:
             print('not yet evaluated!')
+    elif action == 'plot_loss':
+        plot_loss(check_dir, filename, path_loss, smooth_n=batchsize)
 
 
 ### Testing the evaluation for imagenet
@@ -585,7 +639,7 @@ if __name__ == '__main__':
     parser.add_argument("-t","--time",type=int,help="number of timesteps",default=5)
     parser.add_argument("-n","--n_neurons",type=int,help="number of neurons/features",default=10)
     parser.add_argument("--kernel",type=int,help="kernel size",default=3)
-    parser.add_argument("action",help="what to do? [train,eval,overtrain,print,reset]", choices=['train', 'eval', 'overtrain', 'print', 'reset'])
+    parser.add_argument("action",help="what to do? [train,eval,overtrain,print,reset,plot_loss]", choices=['train', 'eval', 'overtrain', 'print', 'reset', 'plot_loss'])
     parser.add_argument("model_name",help="model to be trained [model,deep,recurrent,pred,res,min,model2,BLT]", choices=['model','model2', 'deep','res','recurrent','pred','min','BLT','BT','BL','B'])
     args=parser.parse_args()
     main(args.model_name,args.action,device=args.device,weight_decay=float(args.weight_decay),epochs=args.epochs,
