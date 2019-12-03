@@ -715,8 +715,10 @@ def generate_image_dist(dist_probabilities,
     select_size = im_size - np.array((dx,dy))
     x = np.random.randint(select_size[0])
     y = np.random.randint(select_size[1])
-    positions_im = np.array([[x,y],[x+dx,y+dy]])
-    
+    if np.random.rand() > 0.5:
+        positions_im = np.array([[x,y],[x+dx,y+dy]])
+    else:
+        positions_im = np.array([[x+dx,y],[x,y+dy]])
     col = np.random.randint(num_colors)
     im = gen_rect_leaf(im_size,
           sizes=sizes,
