@@ -15,10 +15,10 @@ import matplotlib.pyplot as plt
 
 def main(n_images = 1000000, im_size=3, n_val = 10000):
     if im_size == 3:
-        sizes = np.array([[1,3][3,1]])
+        sizes = np.array([1,3,5,7])
         exponents = np.array([0])
     elif im_size == 5:
-        sizes = np.array([1,5])
+        sizes = np.array([1,3,5,7])
         exponents = np.array([0])
     else:
         sizes = np.arange(5,im_size+1,5)
@@ -26,12 +26,16 @@ def main(n_images = 1000000, im_size=3, n_val = 10000):
     im_size = np.array((im_size,im_size))
 
     #p_dist = np.load('p_dist_5.npy')
-    p_dist, p_same_sum = optimize_distance_distribution(im_size, sizes, exponents)
+    p_dist, p_same_sum, p_same = optimize_distance_distribution2(im_size, sizes, exponents)
     plt.figure()
     plt.imshow(p_dist, vmin=0, vmax=np.max(p_dist))
     plt.title(p_same_sum)
     plt.colorbar()
     plt.show()
+    
+    np.save('/Users/heiko/deadrects/p_dist_%d' % im_size[0],p_dist)
+    np.save('/Users/heiko/deadrects/p_same_%d' % im_size[0],p_same)
+    np.save('/Users/heiko/deadrects/p_same_sum_%d' % im_size[0],p_same_sum)
     
     dl.save_training_data('/Users/heiko/deadrects/training_%d' % im_size[0],n_images,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist)
     dl.save_training_data('/Users/heiko/deadrects/validation_%d' % im_size[0],n_val,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist)
@@ -142,10 +146,8 @@ def optimize_distance_distribution(im_size,sizes,exponents):
     print('starting main optimizatiton\n')
     if im_size[0] <=100:
         N = 15000
-        l_decay = 0.995
     else:
         N = 150000
-        l_decay = 0.9999
     losses = []
     for iUpdate in tqdm.trange(N):
         p_same_sum = torch.sum(torch.exp(ps-torch.logsumexp(ps,0))*p_same_vec)
@@ -163,8 +165,100 @@ def optimize_distance_distribution(im_size,sizes,exponents):
         losses.append(loss.item())
         
     ps_im = np.concatenate(([0], ps.exp().detach().numpy())).reshape(im_size)
-    return ps_im, p_same_sum.detach().numpy()
+    return ps_im, p_same_sum.detach().numpy(), p_same.numpy()
 
+def optimize_distance_distribution2(im_size,sizes,exponents):
+    print('started optimizing the distance distribution\n')
+    lamb1 = torch.Tensor([-1])
+    lamb1.requires_grad = True
+    
+    print('calculating p_same\n')
+    p_same = np.zeros(im_size)
+    for iExp in exponents:
+        prob = sizes ** (-iExp/2)
+        prob = prob/np.sum(prob)
+        p_same += calc_prob_one_grid(sizes = sizes, prob = prob, grid = None, dx = np.arange(im_size[0]), dy = np.arange(im_size[1]))
+    
+    p_same = p_same/len(exponents)
+    #p_same = torch.Tensor(p_same/len(exponents))
+    p_same_full = np.concatenate(
+            [np.flip(np.concatenate([np.flip(p_same[1:,1:],0),p_same[:,1:]]),1),
+             np.concatenate([np.flip(p_same[1:],0),p_same])],1)
+    
+    plt.figure()
+    plt.imshow(p_same)
+    plt.colorbar()
+    
+    p_same_vec = p_same_full.flatten()
+    id1 = int(2*(im_size[1]-1)*im_size[0])
+    p_same_vec = np.concatenate([p_same_vec[:id1],
+                                p_same_vec[(id1+1):]])
+    
+    p_same_vec = torch.Tensor(p_same_vec)
+    
+    lamb1 = lamb1-1
+    ps = -lamb1*p_same_vec
+    ps_norm = ps - torch.logsumexp(ps,dim=0)
+    p_same_sum = torch.sum(torch.exp(ps_norm)*p_same_vec)
+        
+    lamb1 = 0
+    while p_same_sum>0.5:
+        lamb1 = lamb1+1
+        ps = -lamb1*p_same_vec
+        ps_norm = ps - torch.logsumexp(ps,dim=0)
+        p_same_sum = torch.sum(torch.exp(ps_norm)*p_same_vec)
+    while p_same_sum<0.5:
+        lamb1 = lamb1-1
+        ps = -lamb1*p_same_vec
+        ps_norm = ps - torch.logsumexp(ps,dim=0)
+        p_same_sum = torch.sum(torch.exp(ps_norm)*p_same_vec)
+    lamb2 = lamb1+1
+    N = 50
+    for iUpdate in range(N):
+        lamb_new = (lamb1+lamb2)/2
+        ps = -lamb_new*p_same_vec
+        ps_norm = ps - torch.logsumexp(ps,dim=0)
+        p_same_sum = torch.sum(torch.exp(ps_norm)*p_same_vec)
+        if p_same_sum > 0.5:
+            lamb1 = lamb_new
+        else:
+            lamb2 = lamb_new
+#    
+#    optimizer = torch.optim.SGD([lamb1], lr = 0.1, momentum = 0)
+#    
+#    print('starting main optimizatiton\n')
+#    if im_size[0] <=100:
+#        N = 15000
+#    else:
+#        N = 150000
+#    losses = []
+#    for iUpdate in tqdm.trange(N):
+#        ps = -lamb1*p_same_vec
+#        ps_norm = ps - torch.logsumexp(ps,dim=0)
+#        p_same_sum = torch.sum(torch.exp(ps_norm)*p_same_vec)
+#        
+#        loss = torch.abs(p_same_sum-0.5)
+#        
+#        loss.backward()
+#        
+#        optimizer.step()
+#        optimizer.zero_grad()
+#        
+#        #optimizer.param_groups[0]['lr'] =  5/(iUpdate+5)
+#        losses.append(loss.item())
+      
+    lamb_new = (lamb1+lamb2)/2
+    ps = -lamb_new*p_same_vec
+    ps_norm = ps - torch.logsumexp(ps,dim=0)  
+    ps = torch.exp(ps_norm).detach().numpy()
+    ps_im = np.concatenate([ps[:id1],[0],ps[(id1):]])
+    ps_im = ps_im.reshape(2*np.array(im_size)-1)
+    ps_im = 4*ps_im[(im_size[0]-1):,(im_size[1]-1):]
+    ps_im[0] = ps_im[0]/2
+    ps_im[:,0] = ps_im[:,0]/2
+    
+    #ps_im = np.concatenate(([0], ps.exp().detach().numpy())).reshape(im_size)
+    return ps_im, p_same_sum.detach().numpy(), p_same
 
 if __name__ == '__main__':
     import argparse
