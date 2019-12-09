@@ -152,7 +152,7 @@ class model2_class(nn.Module):
         self.apply(init_weights_layer_linear)
 
 class model_BLT(nn.Module):
-    def __init__(self,im_size,n_rep=5,n_neurons=10,kernel=3,L=True,T=True):
+    def __init__(self,im_size,n_rep=5,n_neurons=10,kernel=3,L=True,T=True,average=False):
         super(model_BLT, self).__init__()
         self.norm = nn.InstanceNorm2d(3)
         # Bottom-up
@@ -168,13 +168,15 @@ class model_BLT(nn.Module):
             # top-down
             self.conv2_1 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)),bias=False)
             self.conv3_2 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel, padding=(int((kernel-1)/2),int((kernel-1)/2)),bias=False)
-        self.fc1 = nn.Linear(n_neurons*im_size*im_size, n_neurons)
-        self.fc1 = nn.Linear(n_neurons, 1)
+        if not average:
+            self.fc1 = nn.Linear(n_neurons*im_size*im_size, n_neurons)
+        self.fc2 = nn.Linear(n_neurons, 1)
         self.n_rep = n_rep
         self.n_neurons = n_neurons
         self.L = L
         self.T = T
         self.im_size = im_size
+        self.average = average
     def forward(self, x):
         x = self.norm(x)
         im_size = self.im_size
@@ -198,8 +200,11 @@ class model_BLT(nn.Module):
                 h1 = F.relu(self.conv0_1(x))
                 h2 = F.relu(self.conv1_2(h1))
                 h3 = F.relu(self.conv2_3(h2))
-        x = h3.view(-1,self.n_neurons*im_size*im_size)
-        x = F.relu(self.fc1(x))
+        if self.average:
+            x = torch.mean(torch.mean(h3,3),2)
+        else:
+            x = h3.view(-1,self.n_neurons*im_size*im_size)
+            x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x
     def init_weights(self):
@@ -390,7 +395,7 @@ def optimize_saved(model, N, root_dir, optimizer,
                    loss_file=None, tMax=np.inf, smooth_l = 0, device='cpu',
                    val_dir=None, check_dir=None, filename=None):
     d = dead_leaves_dataset(root_dir)
-    dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=6)
+    dataload = DataLoader(d,batch_size=batchsize,shuffle=True,num_workers=20)
     print('starting optimization\n')
     if loss_file:
         if os.path.isfile(loss_file):
@@ -501,15 +506,15 @@ def plot_loss(check_dir, filename, path_loss, smooth_n=25):
     val_loss = []
     val_acc = []
     timestamp = []
-    for p in pathlib.Path(check_dir).glob(filename+'*'+'l.npy'):
+    for p in pathlib.Path(check_dir).glob(filename+'_[0-9]*_[0-9]*_'+'l.npy'):
         val_loss.append(np.mean(np.load(p)))
-        timestamp.append(int(p.name.split('_')[3])*1000000+int(p.name.split('_')[4]))
+        timestamp.append(int(p.name.split('_')[-3])*1000000+int(p.name.split('_')[-2]))
     order = np.argsort(timestamp)
     val_loss = np.array(val_loss)[order]
     timestamp = []
-    for p in pathlib.Path(check_dir).glob(filename+'*'+'acc.npy'):
+    for p in pathlib.Path(check_dir).glob(filename+'_[0-9]*_[0-9]*_'+'acc.npy'):
         val_acc.append(np.mean(np.load(p)))
-        timestamp.append(int(p.name.split('_')[3])*1000000+int(p.name.split('_')[4]))
+        timestamp.append(int(p.name.split('_')[-3])*1000000+int(p.name.split('_')[-2]))
     order = np.argsort(timestamp)
     val_acc = np.array(val_acc)[order]
     x_val = np.linspace(len(losses)/len(val_loss),len(losses)-smooth_n,len(val_loss))
@@ -521,7 +526,7 @@ def plot_loss(check_dir, filename, path_loss, smooth_n=25):
     plt.show()
 
 
-def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,tMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3,im_size=5):
+def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 10**-3,epochs=1,lr = 0.001,tMax=np.inf,batchsize=20,time=5,n_neurons=10,kernel=3,im_size=5,average=False):
     filename = 'model_%d_%s' % (im_size, model_name)
     if model_name == 'model':
         model = model_class(im_size).to(device)
@@ -536,19 +541,21 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
     elif model_name == 'res':
         model = model_residual().to(device)
     elif model_name == 'BLT':
-        model = model_BLT(n_rep=time,n_neurons=n_neurons,kernel=kernel,L=True,T=True).to(device)
+        model = model_BLT(im_size, n_rep=time,n_neurons=n_neurons,kernel=kernel,L=True,T=True,average=average).to(device)
     elif model_name == 'BL':
-        model = model_BLT(n_rep=time,n_neurons=n_neurons,kernel=kernel,L=True,T=False).to(device)
+        model = model_BLT(im_size, n_rep=time,n_neurons=n_neurons,kernel=kernel,L=True,T=False,average=average).to(device)
     elif model_name == 'BT':
-        model = model_BLT(n_rep=time,n_neurons=n_neurons,kernel=kernel,L=False,T=True).to(device)
+        model = model_BLT(im_size, n_rep=time,n_neurons=n_neurons,kernel=kernel,L=False,T=True,average=average).to(device)
     elif model_name == 'B':
-        model = model_BLT(n_rep=time,n_neurons=n_neurons,kernel=kernel,L=False,T=False).to(device)
+        model = model_BLT(im_size, n_rep=time,n_neurons=n_neurons,kernel=kernel,L=False,T=False,average=average).to(device)
     if not n_neurons==10:
         filename = filename + '_nn%02d' % n_neurons
     if not kernel==3:
         filename = filename + '_k%02d' % kernel
     if not time==5:
         filename = filename + '_%02d' % time
+    if average:
+        filename = filename + '_avg'
     check_dir = '/Users/heiko/deadrects/check_points/'
     data_folder = '/Users/heiko/deadrects/training_%d/' % im_size
     val_dir = '/Users/heiko/deadrects/validation_%d/' % im_size
@@ -614,11 +621,13 @@ if __name__ == '__main__':
     parser.add_argument("-n","--n_neurons",type=int,help="number of neurons/features",default=10)
     parser.add_argument("-i","--im_size",type=int,help="image size",default=5)
     parser.add_argument("-k","--kernel",type=int,help="kernel size",default=3)
+    parser.add_argument('--average', dest='average', action='store_true')
     parser.add_argument("action",help="what to do? [train,eval,overtrain,print,reset,plot_loss]", choices=['train', 'eval', 'overtrain', 'print', 'reset', 'plot_loss'])
     parser.add_argument("model_name",help="model to be trained [model,deep,recurrent,pred,res,min,model2,BLT]", choices=['model','model2', 'deep','res','recurrent','pred','min','BLT','BT','BL','B'])
+    parser.set_defaults(average=False)
     args=parser.parse_args()
     main(args.model_name, args.action, device=args.device, 
          weight_decay=float(args.weight_decay), epochs=args.epochs,
          lr = args.learning_rate, tMax=args.tMax, batchsize=args.batch_size,
          time=args.time, n_neurons=args.n_neurons, kernel=args.kernel,
-         im_size=args.im_size)
+         im_size=args.im_size, average=args.average)
