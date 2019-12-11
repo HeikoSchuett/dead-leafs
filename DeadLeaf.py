@@ -618,13 +618,53 @@ def mark_points(image,positions_im):
     
 
 
-def generate_image(distance,angle,abs_angle,
+def generate_image(distance, angle, abs_angle,
                    sizes=np.array([5,10,15,20,25,30]),
                    exponent=3,
                    border=False,
                    im_size=np.array([30,30]),
                    num_colors=9,
-                   m_points=True):
+                   m_points=True,
+                   same_color=0):
+    """
+    
+    Parameters
+    ----------
+    distance : float 
+    angle : float
+    abs_angle : float
+    exponent : float, optional
+        DESCRIPTION. The default is 3.
+    border : TYPE, optional
+        DESCRIPTION. The default is False.
+    sizes : TYPE, optional
+        DESCRIPTION. The default is np.array([5,10,15,20,25,30]).
+    im_size : TYPE, optional
+        DESCRIPTION. The default is np.array([30,30]).
+    num_colors : TYPE, optional
+        number of colors used. The default is 9.
+    m_points : TYPE, optional
+        whether points are marked. The default is True.
+    same_color : TYPE, optional
+        how to force the two points to have the same color. 
+        0(default) -> not at all
+        1(old)     -> color in rectangles
+        2(new)     -> generate images until it is true
+
+    Returns
+    -------
+    image : np.ndarray 
+        DESCRIPTION.
+    rect_list : 
+        true rectangles
+    positions_im : np.ndarray
+        Querried points.
+    solution : bool
+        are the two points on the same rectangle?
+    col : int
+        which color did the points have?
+
+    """
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
     if angle and not abs_angle:
         pos = [[-distance/2,-distance/2],[distance/2,distance/2]]
@@ -641,15 +681,37 @@ def generate_image(distance,angle,abs_angle,
     positions_im = np.zeros_like(positions)
     positions_im[:,1] = np.ceil(im_size/2)+positions[:,0]
     positions_im[:,0] = np.ceil(im_size/2)-positions[:,1]-1
-    col = np.random.randint(num_colors)
-    im = gen_rect_leaf(im_size,
-          sizes=sizes,
-          prob = prob,
-          grid=1,
-          colors=np.linspace(0,1,num_colors),
-          fixedIdx = positions_im,
-          fixedC=col,
-          border=border)
+    if same_color==0:
+        im = gen_rect_leaf(im_size,
+              sizes=sizes,
+              prob = prob,
+              grid=1,
+              colors=np.linspace(0,1,num_colors),
+              border=border)
+        col = im[0][positions_im[0]]
+    elif same_color==1:
+        col = np.random.randint(num_colors)
+        im = gen_rect_leaf(im_size,
+              sizes=sizes,
+              prob = prob,
+              grid=1,
+              colors=np.linspace(0,1,num_colors),
+              fixedIdx = positions_im,
+              fixedC=col,
+              border=border)
+    elif same_color==2:
+        repeat = True
+        while repeat:
+            im = gen_rect_leaf(im_size,
+                  sizes=sizes,
+                  prob = prob,
+                  grid=1,
+                  colors=np.linspace(0,1,num_colors),
+                  border=border)
+            if (im[0][positions_im[0][0],positions_im[0][1]]==
+                im[0][positions_im[1][0],positions_im[1][1]]):
+                repeat=False
+        col = im[0][positions_im[0]]
     image = im[0]
     image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
     image[im[0]==5,:] = [.5,.5,1]
@@ -658,13 +720,52 @@ def generate_image(distance,angle,abs_angle,
     return (image,im[1],positions_im,im[2],col)
 
 
-def generate_image_point(point_probabilities,
+def generate_image_point(point_probabilities=None,
                          exponent=3,
                          border=False,
                          sizes=np.array([5,10,15,20,25,30]),
                          im_size=np.array([30,30]),
                          num_colors=9,
-                         m_points=True):
+                         m_points=True,
+                         same_color=0):
+    """
+    
+    Parameters
+    ----------
+    point_probabilities : np.ndarray
+        DESCRIPTION.
+    exponent : TYPE, optional
+        DESCRIPTION. The default is 3.
+    border : TYPE, optional
+        DESCRIPTION. The default is False.
+    sizes : TYPE, optional
+        DESCRIPTION. The default is np.array([5,10,15,20,25,30]).
+    im_size : TYPE, optional
+        DESCRIPTION. The default is np.array([30,30]).
+    num_colors : TYPE, optional
+        number of colors used. The default is 9.
+    m_points : TYPE, optional
+        whether points are marked. The default is True.
+    same_color : TYPE, optional
+        how to force the two points to have the same color. 
+        0(default) -> not at all
+        1(old)     -> color in rectangles
+        2(new)     -> generate images until it is true
+
+    Returns
+    -------
+    image : np.ndarray 
+        DESCRIPTION.
+    rect_list : 
+        true rectangles
+    positions_im : np.ndarray
+        Querried points.
+    solution : bool
+        are the two points on the same rectangle?
+    col : int
+        which color did the points have?
+
+    """
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
     if point_probabilities is None:
         point_probabilities = np.ones(im_size)
@@ -679,16 +780,37 @@ def generate_image_point(point_probabilities,
     idx2 = np.where(np.cumsum(point_probabilities)>r2)[0][0]
     positions_im = np.unravel_index((idx1,idx2),im_size)
     positions_im = np.array(positions_im).T
-    
-    col = np.random.randint(num_colors)
-    im = gen_rect_leaf(im_size,
-          sizes=sizes,
-          prob = prob,
-          grid=1,
-          colors=np.linspace(0,1,num_colors),
-          fixedIdx = positions_im,
-          fixedC=col,
-          border=border)
+    if same_color==0:
+        im = gen_rect_leaf(im_size,
+              sizes=sizes,
+              prob = prob,
+              grid=1,
+              colors=np.linspace(0,1,num_colors),
+              border=border)
+        col = im[0][positions_im[0]]
+    elif same_color==1:
+        col = np.random.randint(num_colors)
+        im = gen_rect_leaf(im_size,
+              sizes=sizes,
+              prob = prob,
+              grid=1,
+              colors=np.linspace(0,1,num_colors),
+              fixedIdx = positions_im,
+              fixedC=col,
+              border=border)
+    elif same_color==2:
+        repeat = True
+        while repeat:
+            im = gen_rect_leaf(im_size,
+                  sizes=sizes,
+                  prob = prob,
+                  grid=1,
+                  colors=np.linspace(0,1,num_colors),
+                  border=border)
+            if (im[0][positions_im[0][0],positions_im[0][1]]==
+                im[0][positions_im[1][0],positions_im[1][1]]):
+                repeat=False
+        col = im[0][positions_im[0]]
     image = im[0]
     image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
     image[im[0]==5,:] = [.5,.5,1]
@@ -702,8 +824,47 @@ def generate_image_dist(dist_probabilities,
                         sizes=np.array([5,10,15,20,25,30]),
                         im_size=np.array([30,30]),
                         num_colors=9,
-                        m_points=True
+                        m_points=True,
+                        same_color=0
                         ):
+    """
+    
+    Parameters
+    ----------
+    point_probabilities : np.ndarray
+        DESCRIPTION.
+    exponent : TYPE, optional
+        DESCRIPTION. The default is 3.
+    border : TYPE, optional
+        DESCRIPTION. The default is False.
+    sizes : TYPE, optional
+        DESCRIPTION. The default is np.array([5,10,15,20,25,30]).
+    im_size : TYPE, optional
+        DESCRIPTION. The default is np.array([30,30]).
+    num_colors : TYPE, optional
+        number of colors used. The default is 9.
+    m_points : TYPE, optional
+        whether points are marked. The default is True.
+    same_color : TYPE, optional
+        how to force the two points to have the same color. 
+        0(default) -> not at all
+        1(old)     -> color in rectangles
+        2(new)     -> generate images until it is true
+
+    Returns
+    -------
+    image : np.ndarray 
+        DESCRIPTION.
+    rect_list : 
+        true rectangles
+    positions_im : np.ndarray
+        Querried points.
+    solution : bool
+        are the two points on the same rectangle?
+    col : int
+        which color did the points have?
+
+    """
     im_size = np.array(im_size)
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
     if dist_probabilities is None:
@@ -719,20 +880,42 @@ def generate_image_dist(dist_probabilities,
         positions_im = np.array([[x,y],[x+dx,y+dy]])
     else:
         positions_im = np.array([[x+dx,y],[x,y+dy]])
-    col = np.random.randint(num_colors)
-    im = gen_rect_leaf(im_size,
-          sizes=sizes,
-          prob = prob,
-          grid=1,
-          colors=np.linspace(0,1,num_colors),
-          fixedIdx = positions_im,
-          fixedC=col,
-          border=border)
+    if same_color==0:
+        im = gen_rect_leaf(im_size,
+              sizes=sizes,
+              prob = prob,
+              grid=1,
+              colors=np.linspace(0,1,num_colors),
+              border=border)
+        col = im[0][positions_im[0]]
+    elif same_color==1:
+        col = np.random.randint(num_colors)
+        im = gen_rect_leaf(im_size,
+              sizes=sizes,
+              prob = prob,
+              grid=1,
+              colors=np.linspace(0,1,num_colors),
+              fixedIdx = positions_im,
+              fixedC=col,
+              border=border)
+    elif same_color==2:
+        repeat = True
+        while repeat:
+            im = gen_rect_leaf(im_size,
+                  sizes=sizes,
+                  prob = prob,
+                  grid=1,
+                  colors=np.linspace(0,1,num_colors),
+                  border=border)
+            if (im[0][positions_im[0][0],positions_im[0][1]]==
+                im[0][positions_im[1][0],positions_im[1][1]]):
+                repeat=False
+        col = im[0][positions_im[0]]
     image = im[0]
     image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
     image[im[0]==5,:] = [.5,.5,1]
     if m_points:
-        image = mark_points(image,positions_im)
+        image = mark_points(image, positions_im)
     return (image,im[1],positions_im,im[2],col)
 
 def generate_image_from_rects(im_size,rectList,border=False,colors=None):
