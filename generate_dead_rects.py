@@ -15,11 +15,11 @@ import matplotlib.pyplot as plt
 
 def main(n_images = 1000000, im_size=3, n_val = 10000, n_col=9):
     if im_size == 3:
-        sizes = np.array([1,3,5,7])
-        exponents = np.array([0])
+        sizes = np.array([1,3,5])
+        exponents = np.array([3])
     elif im_size == 5:
-        sizes = np.array([1,3,5,7])
-        exponents = np.array([0])
+        sizes = np.array([1,3,5])
+        exponents = np.array([3])
     else:
         sizes = np.arange(5,im_size+1,5)
         exponents = np.array([3])
