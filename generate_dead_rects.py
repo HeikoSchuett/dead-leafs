@@ -13,7 +13,7 @@ import torch
 import tqdm
 import matplotlib.pyplot as plt
 
-def main(n_images = 1000000, im_size=3, n_val = 10000):
+def main(n_images = 1000000, im_size=3, n_val = 10000, n_col=9):
     if im_size == 3:
         sizes = np.array([1,3,5,7])
         exponents = np.array([0])
@@ -26,19 +26,24 @@ def main(n_images = 1000000, im_size=3, n_val = 10000):
     im_size = np.array((im_size,im_size))
 
     #p_dist = np.load('p_dist_5.npy')
-    p_dist, p_same_sum, p_same = optimize_distance_distribution2(im_size, sizes, exponents)
+    p_dist, p_same_sum, p_same = optimize_distance_distribution2(im_size, sizes, exponents, n_col=n_col)
     plt.figure()
     plt.imshow(p_dist, vmin=0, vmax=np.max(p_dist))
     plt.title(p_same_sum)
     plt.colorbar()
     plt.show()
     
-    np.save('/Users/heiko/deadrects/p_dist_%d' % im_size[0],p_dist)
-    np.save('/Users/heiko/deadrects/p_same_%d' % im_size[0],p_same)
-    np.save('/Users/heiko/deadrects/p_same_sum_%d' % im_size[0],p_same_sum)
+    if n_col==9:
+        np.save('/Users/heiko/deadrects/p_dist_%d' % im_size[0],p_dist)
+        np.save('/Users/heiko/deadrects/p_same_%d' % im_size[0],p_same)
+        np.save('/Users/heiko/deadrects/p_same_sum_%d' % im_size[0],p_same_sum,)
+    else:
+        np.save('/Users/heiko/deadrects/p_dist_%d_C%d' % im_size[0],p_dist,n_col)
+        np.save('/Users/heiko/deadrects/p_same_%d_C%d' % im_size[0],p_same,n_col)
+        np.save('/Users/heiko/deadrects/p_same_sum_%d_C%d' % im_size[0],p_same_sum,n_col)
     
-    dl.save_training_data('/Users/heiko/deadrects/training_%d' % im_size[0],n_images,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist)
-    dl.save_training_data('/Users/heiko/deadrects/validation_%d' % im_size[0],n_val,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist)
+    dl.save_training_data('/Users/heiko/deadrects/training_%d' % im_size[0],n_images,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist,same_color=2)
+    dl.save_training_data('/Users/heiko/deadrects/validation_%d' % im_size[0],n_val,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist,same_color=2)
     
     
 def cartesian(arrays, out=None):
@@ -167,7 +172,7 @@ def optimize_distance_distribution(im_size,sizes,exponents):
     ps_im = np.concatenate(([0], ps.exp().detach().numpy())).reshape(im_size)
     return ps_im, p_same_sum.detach().numpy(), p_same.numpy()
 
-def optimize_distance_distribution2(im_size,sizes,exponents):
+def optimize_distance_distribution2(im_size,sizes,exponents,n_col=9):
     print('started optimizing the distance distribution\n')
     lamb1 = torch.Tensor([-1])
     lamb1.requires_grad = True
@@ -180,6 +185,8 @@ def optimize_distance_distribution2(im_size,sizes,exponents):
         p_same += calc_prob_one_grid(sizes = sizes, prob = prob, grid = None, dx = np.arange(im_size[0]), dy = np.arange(im_size[1]))
     
     p_same = p_same/len(exponents)
+    
+    p_same = (n_col*p_same)/((n_col-1)*p_same+1)
     #p_same = torch.Tensor(p_same/len(exponents))
     p_same_full = np.concatenate(
             [np.flip(np.concatenate([np.flip(p_same[1:,1:],0),p_same[:,1:]]),1),
@@ -266,5 +273,6 @@ if __name__ == '__main__':
     parser.add_argument("-n","--n_images", help="numer of training images", type = int ,default=1000000)
     parser.add_argument("-v","--n_val", help="numer of validation images", type = int ,default=10000)
     parser.add_argument("-i","--im_size",type=int,help="image size",default=5)
+    parser.add_argument("-c","--n_col",type=int,help="number of colors",default=9)
     args=parser.parse_args()
-    main(n_images=args.n_images, im_size=args.im_size, n_val=args.n_val)
+    main(n_images=args.n_images, im_size=args.im_size, n_val=args.n_val, n_col=args.n_col)

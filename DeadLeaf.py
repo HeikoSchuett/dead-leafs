@@ -712,12 +712,13 @@ def generate_image(distance, angle, abs_angle,
                 im[0][positions_im[1][0],positions_im[1][1]]):
                 repeat=False
         col = im[0][positions_im[0]]
+    solution = test_positions(im[1],positions_im)
     image = im[0]
     image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
     image[im[0]==5,:] = [.5,.5,1]
     if m_points:
         image = mark_points(image,positions_im)
-    return (image,im[1],positions_im,im[2],col)
+    return (image,im[1],positions_im,solution,col)
 
 
 def generate_image_point(point_probabilities=None,
@@ -811,12 +812,13 @@ def generate_image_point(point_probabilities=None,
                 im[0][positions_im[1][0],positions_im[1][1]]):
                 repeat=False
         col = im[0][positions_im[0]]
+    solution = test_positions(im[1],positions_im)
     image = im[0]
     image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
     image[im[0]==5,:] = [.5,.5,1]
     if m_points:
         image = mark_points(image,positions_im)
-    return (image,im[1],positions_im,im[2],col)
+    return (image,im[1],positions_im,solution,col)
         
 def generate_image_dist(dist_probabilities,
                         exponent=3,
@@ -911,12 +913,13 @@ def generate_image_dist(dist_probabilities,
                 im[0][positions_im[1][0],positions_im[1][1]]):
                 repeat=False
         col = im[0][positions_im[0]]
+    solution = test_positions(im[1],positions_im)
     image = im[0]
     image = np.repeat(np.expand_dims(image,axis=-1),3,axis=-1)
     image[im[0]==5,:] = [.5,.5,1]
     if m_points:
         image = mark_points(image, positions_im)
-    return (image,im[1],positions_im,im[2],col)
+    return (image,im[1],positions_im,solution,col)
 
 def generate_image_from_rects(im_size,rectList,border=False,colors=None):
     if colors is None:
@@ -1001,7 +1004,8 @@ def save_training_data(root_dir, N, exponents=np.arange(1,6),
                        distancesd=None,
                        m_points=True,
                        point_probabilities=None,
-                       dist_probabilities=None):
+                       dist_probabilities=None,
+                       same_color=0):
     # saves training images into a folder
     if not os.path.isdir(root_dir):
         os.mkdir(root_dir)
@@ -1024,7 +1028,8 @@ def save_training_data(root_dir, N, exponents=np.arange(1,6),
             im = generate_image_point(exponent=exponent,border=False,sizes=sizes,
                                       m_points=m_points,
                                       im_size=im_size,
-                                      point_probabilities=point_probabilities)
+                                      point_probabilities=point_probabilities,
+                                      same_color=same_color)
         elif not dist_probabilities is None:
             distance = None
             angle = None
@@ -1032,7 +1037,8 @@ def save_training_data(root_dir, N, exponents=np.arange(1,6),
             im = generate_image_dist(exponent=exponent,border=False,sizes=sizes,
                                       m_points=m_points,
                                       im_size=im_size,
-                                      dist_probabilities=dist_probabilities)
+                                      dist_probabilities=dist_probabilities,
+                                      same_color=same_color)
         elif not distances is None:
             angle = np.random.randint(2)
             abs_angle = np.random.randint(2)
@@ -1043,7 +1049,8 @@ def save_training_data(root_dir, N, exponents=np.arange(1,6),
             im = generate_image(exponent,0,sizes,
                                 distance,angle,abs_angle,
                                 m_points=m_points,
-                                im_size=im_size)
+                                im_size=im_size,
+                                same_color=same_color)
         else:
             raise ValueError('You have to specify the point distributions somehow!')
         image = im[0]
