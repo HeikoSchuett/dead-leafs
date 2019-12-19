@@ -7,6 +7,7 @@ Created on Wed Oct 10 10:03:12 2018
 
 import numpy as np
 import scipy.signal as signal
+from scipy.ndimage import gaussian_filter
 import tqdm
 import pandas as pd
 from skimage import io
@@ -114,6 +115,80 @@ def gen_rect_leaf(im_size = [255,255],sizes = [5,10,15],colors=[0,0.5,1],grid = 
     else:
         image[image>1] = 1
     return (image,rectList,oneObject)
+
+
+def generate_noise_rect(im_size = [255,255],sizes=[5,10,15],
+                        noiseType='norm', prob=None, border=False,
+                        sd_lowpass=5):
+    """ generates a rectangle image with only noise informaiton
+    """
+    if prob is None:
+        prob = np.ones(len(sizes))
+    sizes = np.array(sizes)
+    prob = np.array(prob)
+    assert np.all(prob>0), 'probabilities for shapes must be >0'
+    assert prob.size == sizes.size, 'probabilities and sizes should have equal length'
+
+    # correction for the different size of the possible area
+    if len(np.array(sizes).shape) == 1:
+        probx = prob * (sizes+im_size[0]-1)/(np.max(sizes)+im_size[0]-1)
+        proby = prob * (sizes+im_size[1]-1)/(np.max(sizes)+im_size[1]-1)
+        probx = probx/np.sum(probx)
+        proby = proby/np.sum(proby)
+        probcx = probx.cumsum()
+        probcy = proby.cumsum()
+    else:
+        prob = prob * (sizes[:,0]+im_size[0]-1)/(np.max(sizes[:,0])+im_size[0]-1)
+        prob = prob * (sizes[:,1]+im_size[1]-1)/(np.max(sizes[:,1])+im_size[1]-1)
+        prob = prob/np.sum(prob)
+        probc = prob.cumsum()
+    image = np.nan*np.zeros(im_size,dtype='float')
+    rectList = list()
+    while np.any(np.isnan(image)):
+        if len(np.array(sizes).shape) == 1:
+            idx_sizex = np.searchsorted(probcx,np.random.rand())
+            idx_sizey = np.searchsorted(probcy,np.random.rand())
+            sizx = sizes[idx_sizex]
+            sizy = sizes[idx_sizey]
+        elif len(np.array(sizes).shape) == 2:
+            idx_size = np.searchsorted(probc,np.random.rand())
+            sizx = sizes[idx_size][0]
+            sizy = sizes[idx_size][1]
+        idx_x = np.random.randint(1-sizx,im_size[0])
+        idx_y = np.random.randint(1-sizy,im_size[1])
+        rectList.append([idx_x,idx_y,sizx,sizy])
+        image[int(max(idx_x,0)):int(max(0,idx_x+sizx)), int(max(idx_y,0)):int(max(0,idx_y+sizy))] = 1
+    rectList=np.array(rectList,dtype=np.int16)
+    for i in range(len(rectList)):
+        noise = 0.25 * np.random.randn(im_size[0],im_size[1])
+        noise = 0.5+gaussian_filter(noise, sd_lowpass, mode='wrap')
+        image[int(max(rectList[len(rectList)-i-1,0],0)):int(max(0,rectList[len(rectList)-i-1,0]+rectList[len(rectList)-i-1,2])),
+              int(max(rectList[len(rectList)-i-1,1],0)):int(max(0,rectList[len(rectList)-i-1,1]+rectList[len(rectList)-i-1,3]))] = noise[
+              int(max(rectList[len(rectList)-i-1,0],0)):int(max(0,rectList[len(rectList)-i-1,0]+rectList[len(rectList)-i-1,2])),
+              int(max(rectList[len(rectList)-i-1,1],0)):int(max(0,rectList[len(rectList)-i-1,1]+rectList[len(rectList)-i-1,3]))]
+        if border:
+            idx_x = rectList[len(rectList)-i-1,0]
+            idx_y = rectList[len(rectList)-i-1,1]
+            sizx = rectList[len(rectList)-i-1,2]
+            sizy = rectList[len(rectList)-i-1,3]
+            if idx_x >= 0:
+                image[int(idx_x),int(max(idx_y,0)):int(max(0,idx_y+sizy))] = 5
+            if (idx_x+sizx) <= im_size[0]:
+                image[int((idx_x+sizx)-1),int(max(idx_y,0)):int(idx_y+sizy)] = 5
+            if idx_y >= 0:
+                image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y)] = 5
+            if (idx_y+sizy) <= im_size[1]:
+                image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y+sizy)-1] = 5
+
+    if border:
+        b = image==5
+    image[image<0] = 0
+    image[image>1] = 1
+    if border:
+        image[b] = 5
+    return (image,rectList)
+
+
 
 
 def calc_prob_one(sizes = [5,10,15],grid=None,prob=None,dx = 1,dy = 1):
