@@ -174,25 +174,33 @@ class model_BLT(nn.Module):
         self.norm = nn.InstanceNorm2d(3)
         # Bottom-up
         self.conv0_1 = nn.Conv2d(3, n_neurons, kernel_size=kernel,
-                                 padding=(int((kernel-1)/2), int((kernel-1)/2)))
+                                 padding=(int((kernel-1)/2),
+                                          int((kernel-1)/2)))
         self.conv1_2 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel,
-                                 padding=(int((kernel-1)/2), int((kernel-1)/2)))
+                                 padding=(int((kernel-1)/2),
+                                          int((kernel-1)/2)))
         self.conv2_3 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel,
-                                 padding=(int((kernel-1)/2), int((kernel-1)/2)))
+                                 padding=(int((kernel-1)/2),
+                                          int((kernel-1)/2)))
         if L:
             # Lateral
             self.conv1_1 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel,
-                                     padding=(int((kernel-1)/2), int((kernel-1)/2)), bias=False)
+                                     padding=(int((kernel-1)/2),
+                                              int((kernel-1)/2)), bias=False)
             self.conv2_2 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel,
-                                     padding=(int((kernel-1)/2), int((kernel-1)/2)), bias=False)
+                                     padding=(int((kernel-1)/2),
+                                              int((kernel-1)/2)), bias=False)
             self.conv3_3 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel,
-                                     padding=(int((kernel-1)/2), int((kernel-1)/2)), bias=False)
+                                     padding=(int((kernel-1)/2),
+                                              int((kernel-1)/2)), bias=False)
         if T:
             # top-down
             self.conv2_1 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel,
-                                     padding=(int((kernel-1)/2), int((kernel-1)/2)), bias=False)
+                                     padding=(int((kernel-1)/2),
+                                              int((kernel-1) / 2)), bias=False)
             self.conv3_2 = nn.Conv2d(n_neurons, n_neurons, kernel_size=kernel,
-                                     padding=(int((kernel-1)/2), int((kernel-1)/2)), bias=False)
+                                     padding=(int((kernel-1)/2),
+                                              int((kernel-1) / 2)), bias=False)
         if not average:
             self.fc1 = nn.Linear(n_neurons*im_size*im_size, n_neurons)
         self.fc2 = nn.Linear(n_neurons, 1)
@@ -206,9 +214,12 @@ class model_BLT(nn.Module):
     def forward(self, x):
         x = self.norm(x)
         im_size = self.im_size
-        h1 = torch.zeros([x.shape[0], self.n_neurons, im_size,im_size], device=x.device)
-        h2 = torch.zeros([x.shape[0], self.n_neurons, im_size,im_size], device=x.device)
-        h3 = torch.zeros([x.shape[0], self.n_neurons, im_size,im_size], device=x.device)
+        h1 = torch.zeros([x.shape[0], self.n_neurons, im_size, im_size],
+                         device=x.device)
+        h2 = torch.zeros([x.shape[0], self.n_neurons, im_size, im_size],
+                         device=x.device)
+        h3 = torch.zeros([x.shape[0], self.n_neurons, im_size, im_size],
+                         device=x.device)
         for i in range(self.n_rep):
             if self.L and self.T:
                 h1 = F.relu(self.conv0_1(x)+self.conv1_1(h1)+self.conv2_1(h2))
@@ -339,13 +350,15 @@ class model_pred_like(nn.Module):
         epsilon = 0.000001
         value1in = F.relu(self.conv1value(x))
         prec1in = F.relu(self.conv1prec(x)) + epsilon
-        neigh1 = F.relu(self.conv1neigh(x)).unsqueeze(0).permute((2, 1, 0, 3, 4))
+        neigh1 = F.relu(self.conv1neigh(x))
+        neigh1 = neigh1.unsqueeze(0).permute((2, 1, 0, 3, 4))
         value1 = value1in
         prec1 = prec1in
         out1 = self.pool(value1)
         value2in = F.relu(self.conv2value(out1))
         prec2in = F.relu(self.conv2prec(out1)) + epsilon
-        neigh2 = F.relu(self.conv2neigh(out1)).unsqueeze(0).permute((2, 1, 0, 3, 4))
+        neigh2 = F.relu(self.conv2neigh(out1))
+        neigh2 = neigh2.unsqueeze(0).permute((2, 1, 0, 3, 4))
         value2 = value2in
         prec2 = prec2in
         neighbors = self.neighbors
@@ -363,7 +376,8 @@ class model_pred_like(nn.Module):
             out1 = self.pool(value1)
             value2in = F.relu(self.conv2value(out1))
             prec2in = F.relu(self.conv2prec(out1)) + epsilon
-            neigh2 = F.relu(self.conv2neigh(out1)).unsqueeze(0).permute((2, 1, 0, 3, 4))
+            neigh2 = F.relu(self.conv2neigh(out1))
+            neigh2 = neigh2.unsqueeze(0).permute((2, 1, 0, 3, 4))
             neighValues2 = get_shifted_values(value2, neighbors)
             neighPrec2 = get_shifted_values(prec2, neighbors)
             neighPrec2 = ((neigh2 * C2 * neighPrec2)
@@ -451,11 +465,11 @@ def optimize(model, N, lr=0.01, Nkeep=100, momentum=0, clip=np.inf,
             y_tensor[i] = torch.as_tensor(ynew[0])
             optimizer.zero_grad()
             y_est = model.forward(x_tensor)
-            l = loss(y_est, y_tensor)
-            l.backward()
+            l_batch = loss(y_est, y_tensor)
+            l_batch.backward()
             nn.utils.clip_grad_norm(model.parameters(), clip)
             optimizer.step()
-            pbar.postfix = '  loss:%0.5f' % l.item()
+            pbar.postfix = '  loss:%0.5f' % l_batch.item()
             pbar.update()
             # if i % 25 == 24:
             #     print(l.item())
@@ -466,7 +480,8 @@ def optimize_saved(model, N, root_dir, optimizer,
                    loss_file=None, tMax=np.inf, smooth_l=0, device='cpu',
                    val_dir=None, check_dir=None, filename=None):
     d = dead_leaves_dataset(root_dir)
-    dataload = DataLoader(d, batch_size=batchsize, shuffle=True, num_workers=20)
+    dataload = DataLoader(d, batch_size=batchsize,
+                          shuffle=True, num_workers=20)
     print('starting optimization\n')
     if loss_file:
         if os.path.isfile(loss_file):
@@ -486,18 +501,18 @@ def optimize_saved(model, N, root_dir, optimizer,
                 y_tensor = samp['solution'].to(device)
                 optimizer.zero_grad()
                 y_est = model.forward(x_tensor)
-                l = loss(y_est, y_tensor)
-                l.backward()
+                l_batch = loss(y_est, y_tensor)
+                l_batch.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), clip)
                 optimizer.step()
                 smooth_l = (smooth_display * smooth_l
-                            + (1 - smooth_display) * l.item())
-                losses[k-1] = l.item()
+                            + (1 - smooth_display) * l_batch.item())
+                losses[k-1] = l_batch.item()
                 pbar.postfix = ',  loss:%0.5f' % (smooth_l
                                                   / (1-smooth_display**(k-k0)))
                 pbar.update(batchsize)
                 if loss_file and not (k % 25):
-                    np.save(loss_file,losses)
+                    np.save(loss_file, losses)
                 if k >= tMax:
                     break
             if ((check_dir is not None) and (val_dir is not None)
@@ -523,32 +538,35 @@ def overtrain(model, root_dir, optimizer, batchsize=20, clip=np.inf,
                 y_tensor = samp['solution'].to(device)
             optimizer.zero_grad()
             y_est = model.forward(x_tensor)
-            l = loss(y_est, y_tensor)
-            l.backward()
+            l_batch = loss(y_est, y_tensor)
+            l_batch.backward()
             nn.utils.clip_grad_norm_(model.parameters(), clip)
             optimizer.step()
-            smooth_l = smooth_display*smooth_l+(1-smooth_display) * l.item()
-            losses[k-1] = l.item()
+            smooth_l = (smooth_display * smooth_l
+                        + (1-smooth_display) * l_batch.item())
+            losses[k-1] = l_batch.item()
             pbar.postfix = ',  loss:%0.5f' % (smooth_l/(1-smooth_display**k))
             pbar.update(batchsize)
             if k >= tMax:
                 return
 
 
-def evaluate(model, root_dir, batchsize=20, device='cpu'):
+def evaluate(model, root_dir, batchsize=20, device='cpu', N_max=np.inf):
     d = dead_leaves_dataset(root_dir)
     dataload = DataLoader(d, batch_size=batchsize, shuffle=True, num_workers=2)
-    with tqdm.tqdm(total=len(d), dynamic_ncols=True, smoothing=0.01) as pbar:
+    with tqdm.tqdm(total=min(len(d),N_max), dynamic_ncols=True, smoothing=0.01) as pbar:
         with torch.no_grad():
-            losses = np.zeros(int(len(d)/batchsize))
-            accuracies = np.zeros(int(len(d)/batchsize))
+            losses = np.zeros(int(min(len(d),N_max)/batchsize))
+            accuracies = np.zeros(int(min(len(d),N_max)/batchsize))
             for i, samp in enumerate(dataload):
+                if i >= (N_max / batchsize):
+                    break
                 x_tensor = samp['image'].to(device)
                 y_tensor = samp['solution'].to(device)
                 y_est = model.forward(x_tensor)
-                l = loss(y_est, y_tensor)
+                l_batch = loss(y_est, y_tensor)
                 acc = accuracy(y_est, y_tensor)
-                losses[i] = l.item()
+                losses[i] = l_batch.item()
                 accuracies[i] = acc.item()
                 pbar.postfix = ',  loss:%0.5f' % np.mean(losses[:(i+1)])
                 pbar.update(batchsize)
@@ -594,7 +612,8 @@ def plot_loss(check_dir, filename, path_loss, smooth_n=25):
     order = np.argsort(timestamp)
     val_loss = np.array(val_loss)[order]
     timestamp = []
-    for p in pathlib.Path(check_dir).glob(filename+'_[0-9]*_[0-9]*_'+'acc.npy'):
+    check_path = pathlib.Path(check_dir)
+    for p in check_path.glob(filename+'_[0-9]*_[0-9]*_'+'acc.npy'):
         val_acc.append(np.mean(np.load(p)))
         timestamp.append(int(p.name.split('_')[-3])*1000000
                          + int(p.name.split('_')[-2]))
@@ -611,11 +630,13 @@ def plot_loss(check_dir, filename, path_loss, smooth_n=25):
     plt.show()
 
 
-def get_optimal_model(check_dir, filename):
+def get_optimal_model(check_dir, model_name, im_size, time, n_neurons,
+                      kernel, average, device='cpu'):
     val_name = []
     val_loss = []
     val_acc = []
     timestamp = []
+    filename = get_filename(model_name, im_size, n_neurons, kernel, time, average)
     for p in pathlib.Path(check_dir).glob(filename+'_[0-9]*_[0-9]*_'+'l.npy'):
         val_name.append(p)
         val_loss.append(np.mean(np.load(p)))
@@ -625,11 +646,77 @@ def get_optimal_model(check_dir, filename):
     val_name = val_name[idx_min]
     model_name = filename.split('_')[2]
     val_name = check_dir + '_'.join(val_name.name.split('_')[:-1])
-    val_acc = np.mean(np.load(val_name+'_acc.npy'))
-    val_loss = np.mean(np.load(val_name+'_l.npy'))
-    print(val_loss)
-    print(val_acc)
-    print(model_name)
+    val_acc = np.mean(np.load(val_name + '_acc.npy'))
+    val_loss = np.mean(np.load(val_name + '_l.npy'))
+    model = get_model(model_name, im_size, time, n_neurons, kernel, average,
+                      device)
+    model.load_state_dict(torch.load(val_name + '.pt'))
+    return model, val_acc, val_loss
+
+
+def calc_results(check_dir='/Users/heiko/deadrects/check_points/',
+                 train_dir = '/Users/heiko/deadrects/training_%d/',
+                 val_dir = '/Users/heiko/deadrects/validation_%d/',
+                 test_dir = '/Users/heiko/deadrects/test_%d/',
+                 model_name='B', time=5, n_neurons=10, kernel=3,
+                 average=False, device='cpu'):
+    results = np.zeros((3,6,2))
+    k = 0
+    for im_size in [3,5,10,30,100,300]:
+        train_dir = train_dir % im_size
+        val_dir = val_dir % im_size
+        test_dir = test_dir % im_size
+        model = get_optimal_model(check_dir, model_name, im_size, time,
+                                  n_neurons, kernel, average, device)[0]
+        loss_train, acc_train = evaluate(model, train_dir,
+                                         batchsize=100, N_max = 10000,
+                                         device=device)
+        results[0,k,0] = np.mean(loss_train)
+        results[0,k,1] = np.mean(acc_train)
+        loss_val, acc_val = evaluate(model, val_dir,
+                                     batchsize=100, N_max = 10000,
+                                     device=device)
+        results[1,k,0] = np.mean(loss_train)
+        results[1,k,1] = np.mean(acc_train)
+        loss_test, acc_test = evaluate(model, test_dir,
+                                       batchsize=100, N_max = 10000,
+                                       device=device)
+        results[2,k,0] = np.mean(loss_train)
+        results[2,k,1] = np.mean(acc_train)
+        k += 1
+    return results
+
+
+def save_results(check_dir='/Users/heiko/deadrects/check_points/',
+                 train_dir = '/Users/heiko/deadrects/training_%d/',
+                 val_dir = '/Users/heiko/deadrects/validation_%d/',
+                 test_dir = '/Users/heiko/deadrects/test_%d/',
+                 time=5, n_neurons=10, kernel=3,
+                 average=False, device='cpu'):
+    res_file_name = ('/Users/heiko/deadrects/results_t%d_nn%02d_k%d'
+                     % (time, n_neurons, kernel))
+    results = np.zeros((4,3,6,2))
+    results[0] = calc_results(check_dir=check_dir, train_dir=train_dir,
+                              val_dir=val_dir, test_dir=test_dir, time=time,
+                              n_neurons=n_neurons, kernel=kernel,
+                              average=average, device=device,
+                              model_name='B')
+    results[1] = calc_results(check_dir=check_dir, train_dir=train_dir,
+                              val_dir=val_dir, test_dir=test_dir, time=time,
+                              n_neurons=n_neurons, kernel=kernel,
+                              average=average, device=device,
+                              model_name='BL')
+    results[2] = calc_results(check_dir=check_dir, train_dir=train_dir,
+                              val_dir=val_dir, test_dir=test_dir, time=time,
+                              n_neurons=n_neurons, kernel=kernel,
+                              average=average, device=device,
+                              model_name='BT')
+    results[3] = calc_results(check_dir=check_dir, train_dir=train_dir,
+                              val_dir=val_dir, test_dir=test_dir, time=time,
+                              n_neurons=n_neurons, kernel=kernel,
+                              average=average, device=device,
+                              model_name='BLT')
+    np.save(res_file_name, results)
 
 
 def get_model(model_name, im_size, time, n_neurons, kernel, average, device):
@@ -664,13 +751,8 @@ def get_model(model_name, im_size, time, n_neurons, kernel, average, device):
     return model
 
 
-def main(model_name, action, average_neighbors=False,
-         device='cpu', weight_decay=10**-3, epochs=1, lr=0.001,
-         tMax=np.inf, batchsize=20, time=5, n_neurons=10,
-         kernel=3, im_size=5, average=False):
+def get_filename(model_name, im_size, n_neurons, kernel, time, average):
     filename = 'model_%d_%s' % (im_size, model_name)
-    model = get_model(model_name, im_size, time, n_neurons,
-                      kernel, average, device)
     if not n_neurons == 10:
         filename = filename + '_nn%02d' % n_neurons
     if not kernel == 3:
@@ -679,6 +761,17 @@ def main(model_name, action, average_neighbors=False,
         filename = filename + '_%02d' % time
     if average:
         filename = filename + '_avg'
+    return filename
+
+
+def main(model_name, action, average_neighbors=False,
+         device='cpu', weight_decay=10**-3, epochs=1, lr=0.001,
+         tMax=np.inf, batchsize=20, time=5, n_neurons=10,
+         kernel=3, im_size=5, average=False):
+    model = get_model(model_name, im_size, time, n_neurons,
+                      kernel, average, device)
+    filename = get_filename(model_name, im_size, n_neurons, kernel, time,
+                            average)
     check_dir = '/Users/heiko/deadrects/check_points/'
     data_folder = '/Users/heiko/deadrects/training_%d/' % im_size
     val_dir = '/Users/heiko/deadrects/validation_%d/' % im_size
@@ -772,11 +865,15 @@ if __name__ == '__main__':
                         type=int, default=3)
     parser.add_argument('--average', dest='average', action='store_true')
     parser.add_argument("action",
-                        help="what to do? [train,eval,overtrain,print,reset,plot_loss]",
-                        choices=['train', 'eval', 'overtrain', 'print', 'reset', 'plot_loss'])
+                        help="what to do? [train, eval, overtrain, print"
+                             + ", reset, plot_loss]",
+                        choices=['train', 'eval', 'overtrain', 'print',
+                                 'reset', 'plot_loss'])
     parser.add_argument("model_name",
-                        help="model to be trained [model,deep,recurrent,pred,res,min,model2,BLT]",
-                        choices=['model','model2', 'deep','res','recurrent','pred','min','BLT','BT','BL','B'])
+                        help="model to be trained [model, deep, recurrent,"
+                             + " pred, res, min, model2, BLT]",
+                        choices=['model', 'model2', 'deep', 'res', 'recurrent',
+                                 'pred', 'min', 'BLT', 'BT', 'BL', 'B'])
     parser.set_defaults(average=False)
     args = parser.parse_args()
     main(args.model_name, args.action, device=args.device,
