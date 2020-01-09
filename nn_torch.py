@@ -664,6 +664,7 @@ def calc_results(check_dir='/Users/heiko/deadrects/check_points/',
     results = np.zeros((3,6,2))
     k = 0
     for im_size in [3,5,10,30,100,300]:
+        print("started model '%s', imsize=%d\n" % (model_name,im_size))
         train_dir_i = train_dir % im_size
         val_dir_i = val_dir % im_size
         test_dir_i = test_dir % im_size
