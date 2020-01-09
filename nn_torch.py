@@ -664,22 +664,22 @@ def calc_results(check_dir='/Users/heiko/deadrects/check_points/',
     results = np.zeros((3,6,2))
     k = 0
     for im_size in [3,5,10,30,100,300]:
-        train_dir = train_dir % im_size
-        val_dir = val_dir % im_size
-        test_dir = test_dir % im_size
+        train_dir_i = train_dir % im_size
+        val_dir_i = val_dir % im_size
+        test_dir_i = test_dir % im_size
         model = get_optimal_model(check_dir, model_name, im_size, time,
                                   n_neurons, kernel, average, device)[0]
-        loss_train, acc_train = evaluate(model, train_dir,
+        loss_train, acc_train = evaluate(model, train_dir_i,
                                          batchsize=100, N_max = 10000,
                                          device=device)
         results[0,k,0] = np.mean(loss_train)
         results[0,k,1] = np.mean(acc_train)
-        loss_val, acc_val = evaluate(model, val_dir,
+        loss_val, acc_val = evaluate(model, val_dir_i,
                                      batchsize=100, N_max = 10000,
                                      device=device)
         results[1,k,0] = np.mean(loss_train)
         results[1,k,1] = np.mean(acc_train)
-        loss_test, acc_test = evaluate(model, test_dir,
+        loss_test, acc_test = evaluate(model, test_dir_i,
                                        batchsize=100, N_max = 10000,
                                        device=device)
         results[2,k,0] = np.mean(loss_train)
