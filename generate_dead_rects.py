@@ -12,6 +12,7 @@ import numpy as np
 import torch
 import tqdm
 import matplotlib.pyplot as plt
+import os.path
 
 def main(n_images = 1000000, im_size=3, n_val = 10000, n_test = 10000, n_col=9):
     if im_size == 3:
@@ -34,17 +35,43 @@ def main(n_images = 1000000, im_size=3, n_val = 10000, n_test = 10000, n_col=9):
     plt.show()
 
     if n_col==9:
-        np.save('/Users/heiko/deadrects/p_dist_%d' % im_size[0],p_dist)
-        np.save('/Users/heiko/deadrects/p_same_%d' % im_size[0],p_same)
-        np.save('/Users/heiko/deadrects/p_same_sum_%d' % im_size[0],p_same_sum,)
-    else:
-        np.save('/Users/heiko/deadrects/p_dist_%d_C%d' % im_size[0],p_dist,n_col)
-        np.save('/Users/heiko/deadrects/p_same_%d_C%d' % im_size[0],p_same,n_col)
-        np.save('/Users/heiko/deadrects/p_same_sum_%d_C%d' % im_size[0],p_same_sum,n_col)
+        np.save('/Users/heiko/deadrects/p_dist_%d' % im_size[0], p_dist)
+        np.save('/Users/heiko/deadrects/p_same_%d' % im_size[0], p_same)
+        np.save('/Users/heiko/deadrects/p_same_sum_%d' % im_size[0], p_same_sum)
 
-    dl.save_training_data('/Users/heiko/deadrects/training_%d' % im_size[0],n_images,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist,same_color=2)
-    dl.save_training_data('/Users/heiko/deadrects/validation_%d' % im_size[0],n_val,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist,same_color=2)
-    dl.save_training_data('/Users/heiko/deadrects/test_%d' % im_size[0],n_test,im_size=im_size,sizes=sizes,exponents=exponents,dist_probabilities=p_dist,same_color=2)
+        if not os.path.isfile('/Users/heiko/deadrects/training_%d/solution.csv' % im_size[0]):
+            dl.save_training_data('/Users/heiko/deadrects/training_%d' % im_size[0],
+                                  n_images, im_size=im_size, sizes=sizes, exponents=exponents,
+                                  dist_probabilities=p_dist, same_color=2)
+        if not os.path.isfile('/Users/heiko/deadrects/validation_%d/solution.csv' % im_size[0]):
+            dl.save_training_data('/Users/heiko/deadrects/validation_%d' % im_size[0],
+                                  n_val, im_size=im_size, sizes=sizes,
+                                  exponents=exponents, dist_probabilities=p_dist,
+                                  same_color=2)
+        if not os.path.isfile('/Users/heiko/deadrects/test_%d/solution.csv' % im_size[0]):
+            dl.save_training_data('/Users/heiko/deadrects/test_%d' % im_size[0],
+                                  n_test, im_size=im_size, sizes=sizes,
+                                  exponents=exponents, dist_probabilities=p_dist,
+                                  same_color=2)
+    else:
+        np.save('/Users/heiko/deadrects/p_dist_%d_C%d' % (im_size[0], n_col),p_dist)
+        np.save('/Users/heiko/deadrects/p_same_%d_C%d' % (im_size[0], n_col),p_same)
+        np.save('/Users/heiko/deadrects/p_same_sum_%d_C%d' % (im_size[0], n_col),p_same_sum)
+
+        if not os.path.isfile('/Users/heiko/deadrects/training_%d_C%d/solution.csv' % (im_size[0], n_col)):
+            dl.save_training_data('/Users/heiko/deadrects/training_%d_C%d' % (im_size[0], n_col),
+                                  n_images, im_size=im_size, sizes=sizes, exponents=exponents,
+                                  dist_probabilities=p_dist, same_color=2)
+        if not os.path.isfile('/Users/heiko/deadrects/validation_%d_C%d/solution.csv' % (im_size[0], n_col)):
+            dl.save_training_data('/Users/heiko/deadrects/validation_%d_C%d' % (im_size[0], n_col),
+                                  n_val, im_size=im_size, sizes=sizes,
+                                  exponents=exponents, dist_probabilities=p_dist,
+                                  same_color=2)
+        if not os.path.isfile('/Users/heiko/deadrects/test_%d_C%d/solution.csv' % (im_size[0], n_col)):
+            dl.save_training_data('/Users/heiko/deadrects/test_%d_C%d' % (im_size[0], n_col),
+                                  n_test, im_size=im_size, sizes=sizes,
+                                  exponents=exponents, dist_probabilities=p_dist,
+                                  same_color=2)
 
 
 def cartesian(arrays, out=None):
