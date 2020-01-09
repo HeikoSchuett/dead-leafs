@@ -632,6 +632,8 @@ def plot_loss(check_dir, filename, path_loss, smooth_n=25):
 
 def get_optimal_model(check_dir, model_name, im_size, time, n_neurons,
                       kernel, average, device='cpu'):
+    model = get_model(model_name, im_size, time, n_neurons, kernel, average,
+                      device)
     val_name = []
     val_loss = []
     val_acc = []
@@ -642,15 +644,14 @@ def get_optimal_model(check_dir, model_name, im_size, time, n_neurons,
         val_loss.append(np.mean(np.load(p)))
         timestamp.append(int(p.name.split('_')[-3])*1000000
                          + int(p.name.split('_')[-2]))
-    idx_min = np.argmin(val_loss)
-    val_name = val_name[idx_min]
-    model_name = filename.split('_')[2]
-    val_name = check_dir + '_'.join(val_name.name.split('_')[:-1])
-    val_acc = np.mean(np.load(val_name + '_acc.npy'))
-    val_loss = np.mean(np.load(val_name + '_l.npy'))
-    model = get_model(model_name, im_size, time, n_neurons, kernel, average,
-                      device)
-    model.load_state_dict(torch.load(val_name + '.pt'))
+    if len(val_loss) >= 1:
+        idx_min = np.argmin(val_loss)
+        val_name = val_name[idx_min]
+        model_name = filename.split('_')[2]
+        val_name = check_dir + '_'.join(val_name.name.split('_')[:-1])
+        val_acc = np.mean(np.load(val_name + '_acc.npy'))
+        val_loss = np.mean(np.load(val_name + '_l.npy'))
+        model.load_state_dict(torch.load(val_name + '.pt'))
     return model, val_acc, val_loss
 
 
