@@ -678,13 +678,13 @@ def calc_results(check_dir='/Users/heiko/deadrects/check_points/',
         loss_val, acc_val = evaluate(model, val_dir_i,
                                      batchsize=100, N_max = 10000,
                                      device=device)
-        results[1,k,0] = np.mean(loss_train)
-        results[1,k,1] = np.mean(acc_train)
+        results[1,k,0] = np.mean(loss_val)
+        results[1,k,1] = np.mean(acc_val)
         loss_test, acc_test = evaluate(model, test_dir_i,
                                        batchsize=100, N_max = 10000,
                                        device=device)
-        results[2,k,0] = np.mean(loss_train)
-        results[2,k,1] = np.mean(acc_train)
+        results[2,k,0] = np.mean(loss_test)
+        results[2,k,1] = np.mean(acc_test)
         k += 1
     return results
 
@@ -695,8 +695,12 @@ def save_results(check_dir='/Users/heiko/deadrects/check_points/',
                  test_dir = '/Users/heiko/deadrects/test_%d/',
                  time=5, n_neurons=10, kernel=3,
                  average=False, device='cpu'):
-    res_file_name = ('/Users/heiko/deadrects/results_t%d_nn%02d_k%d'
-                     % (time, n_neurons, kernel))
+    if average:
+        res_file_name = ('/Users/heiko/deadrects/results_t%d_nn%02d_k%d_avg.npy'
+                         % (time, n_neurons, kernel))
+    else:
+        res_file_name = ('/Users/heiko/deadrects/results_t%d_nn%02d_k%d.npy'
+                         % (time, n_neurons, kernel))
     results = np.zeros((4,3,6,2))
     results[0] = calc_results(check_dir=check_dir, train_dir=train_dir,
                               val_dir=val_dir, test_dir=test_dir, time=time,
@@ -720,6 +724,47 @@ def save_results(check_dir='/Users/heiko/deadrects/check_points/',
                               model_name='BLT')
     np.save(res_file_name, results)
 
+
+def plot_results(time=5, n_neurons=10, kernel=3, average=False):
+    if average:
+        res_file_name = ('/Users/heiko/deadrects/results_t%d_nn%02d_k%d_avg.npy'
+                         % (time, n_neurons, kernel))
+    else:
+        res_file_name = ('/Users/heiko/deadrects/results_t%d_nn%02d_k%d.npy'
+                         % (time, n_neurons, kernel))
+    results = np.load(res_file_name)
+    plt.figure()
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.plot(results[i,:,:,0].T)
+        plt.ylabel('Loss')
+        plt.xticks(range(6),[3,5,10,30,100,300])
+        plt.xlabel('Image size [px]')
+        if i == 0:
+            plt.title('B')
+        elif i == 1:
+            plt.title('BL')
+        elif i == 2:
+            plt.title('BT')
+        elif i == 3:
+            plt.title('BLT')
+    plt.figure()
+    for i in range(4):
+        plt.subplot(2,2,i+1)
+        plt.plot(results[0,:,:,1].T)
+        plt.ylabel('Accuracy')
+        plt.xticks(range(6),[3,5,10,30,100,300])
+        plt.xlabel('Image size [px]')
+        plt.ylim([.5,1])
+        if i == 0:
+            plt.title('B')
+        elif i == 1:
+            plt.title('BL')
+        elif i == 2:
+            plt.title('BT')
+        elif i == 3:
+            plt.title('BLT')
+    
 
 def get_model(model_name, im_size, time, n_neurons, kernel, average, device):
     if model_name == 'model':
