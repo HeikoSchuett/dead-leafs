@@ -32,7 +32,7 @@ def main(n_images = 1000000, im_size=3, n_val = 10000, n_test = 10000, n_col=9):
     plt.imshow(p_dist, vmin=0, vmax=np.max(p_dist))
     plt.title(p_same_sum)
     plt.colorbar()
-    plt.show()
+    # plt.show()
 
     if n_col==9:
         np.save('/Users/heiko/deadrects/p_dist_%d' % im_size[0], p_dist)

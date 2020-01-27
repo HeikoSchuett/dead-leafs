@@ -523,15 +523,15 @@ def plot_loss(check_dir, filename, path_loss, smooth_n=25):
     val_loss = []
     val_acc = []
     timestamp = []
-    for p in pathlib.Path(check_dir).glob(filename+'*'+'l.npy'):
+    for p in pathlib.Path(check_dir).glob(filename+'_*'+'l.npy'):
         val_loss.append(np.mean(np.load(p)))
-        timestamp.append(int(p.name.split('_')[3])*1000000+int(p.name.split('_')[4]))
+        timestamp.append(int(p.name.split('_')[-3])*1000000+int(p.name.split('_')[-2]))
     order = np.argsort(timestamp)
     val_loss = np.array(val_loss)[order]
     timestamp = []
-    for p in pathlib.Path(check_dir).glob(filename+'*'+'acc.npy'):
+    for p in pathlib.Path(check_dir).glob(filename+'_*'+'acc.npy'):
         val_acc.append(np.mean(np.load(p)))
-        timestamp.append(int(p.name.split('_')[3])*1000000+int(p.name.split('_')[4]))
+        timestamp.append(int(p.name.split('_')[-3])*1000000+int(p.name.split('_')[-2]))
     order = np.argsort(timestamp)
     val_acc = np.array(val_acc)[order]
     x_val = np.linspace(len(losses)/len(val_loss),len(losses)-smooth_n,len(val_loss))
