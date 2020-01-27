@@ -80,8 +80,63 @@ class dead_leaves_dataset(Dataset):
         return sample
     
 
+class minimal_gibbs(nn.Module):
+    def __init__(self, n_neurons = 10, steps=5):
+        super(minimal_gibbs, self).__init__()
+        self.conv_enc = nn.Conv2d(1, n_neurons, (3, 3), padding=(1, 1))
+        self.conv_mu =  nn.Conv2d(n_neurons, 1, (1, 1))
+        self.conv_prec =  nn.Conv2d(n_neurons, 1, (1, 1))
+        self.conv_coupling =  nn.Conv2d(n_neurons, 4, (1, 1))
+        self.conv_dec1 = nn.Conv2d(1, n_neurons, (1, 1))
+        self.conv_dec2 = nn.Conv2d(n_neurons, 1, (3, 3), padding=(1, 1))
+        log_var_final = torch.nn.Parameter(data=torch.tensor(0.))
+        self.register_parameter('log_var_final',log_var_final)
+        self.steps = steps
+        self.neighbors = np.array([[1,0],[0,1],[-1,0],[0,-1]],dtype=np.int)
+        self.init_weights()
+        
+    def encode(self,x):
+        f = self.conv_enc(x)
+        return self.conv_mu(f), F.relu(self.conv_prec(f))+ eps, F.relu(self.conv_coupling(f))
+        
+    def decode(self,z):
+        f = self.conv_dec1(z)
+        return self.conv_dec2(f)
+    
+    def reparametrize(self, mu, prec0, coupling):
+        prec = prec0 
+        noise = torch.randn_like(prec)
+        z = mu + noise/torch.sqrt(prec)
+        pad = np.max(np.abs(self.neighbors))
+        prec_new = torch.sum(coupling,1,keepdim=True) + prec
+        for i in range(self.steps):
+            z_pad = F.pad(z,(pad, pad, pad, pad))
+            mu_new = prec*mu
+            k = 0
+            for i_neigh in self.neighbors:
+                mu_new += coupling[:,k:(k+1)] * z_pad[:, :,
+                                  (pad+i_neigh[0]):(mu.shape[2]+pad+i_neigh[0]),
+                                  (pad+i_neigh[1]):(mu.shape[3]+pad+i_neigh[1])]
+                k = k + 1
+            mu_new = mu_new/prec_new
+            noise = torch.randn_like(prec)
+            z = mu_new + noise/torch.sqrt(prec_new)
+        return z
+
+    def forward(self, x):
+        x = x.view(-1,1,imSize[0],imSize[1])
+        mu, prec, coupling = self.encode(x)
+        z = self.reparametrize(mu, prec, coupling)
+        x = self.decode(z)
+        return x, mu, -torch.log(prec), coupling, self.log_var_final
+
+    def init_weights(self):
+        self.apply(init_weights_layer_conv)
+        self.apply(init_weights_layer_linear)
+
+
 class minimal(nn.Module):
-    def __init__(self, n_neurons = 10):
+    def __init__(self, n_neurons=10):
         super(minimal, self).__init__()
         self.fc_enc_1_mu = nn.Linear(imSize[0] * imSize[1], n_neurons)
         self.fc_enc_1_std = nn.Linear(imSize[0] * imSize[1], n_neurons)
@@ -106,7 +161,7 @@ class minimal(nn.Module):
         mu, logvar = self.encode(x)
         z = self.reparametrize(mu,logvar)
         x = self.decode(z)
-        return x, mu, logvar,self.log_var_final
+        return x, mu, logvar, None, self.log_var_final
     
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -145,7 +200,7 @@ class basic(nn.Module):
         mu, logvar = self.encode(x)
         z = self.reparametrize(mu,logvar)
         x = self.decode(z)
-        return x, mu, logvar,self.log_var_final
+        return x, mu, logvar, None, self.log_var_final
     
     def init_weights(self):
         self.apply(init_weights_layer_conv)
@@ -158,10 +213,10 @@ def loss(x_true, x, mu, logvar, log_var_final,alpha=1):
     #MSE = 0.5 * torch.sum((x_true.view(-1,x.shape[1])-x).pow(2))/var_final
     KLD = loss_KLD(logvar,mu)
     #KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
-    return MSE/x.shape[0] + alpha*KLD/x.shape[0] + 0.5*log_var_final
+    return MSE/x.shape[0] + alpha*KLD/x.shape[0] + 0.5*log_var_final*x.shape[1]
 
 def loss_MSE(x_true,x,var_final):
-    MSE = 0.5 * torch.sum((x_true.view(-1,x.shape[1])-x).pow(2))/var_final
+    MSE = 0.5 * torch.sum((x_true.reshape(-1)-x.view(-1)).pow(2))/var_final
     return MSE
 
 def loss_KLD(logvar,mu):
@@ -169,7 +224,7 @@ def loss_KLD(logvar,mu):
     return KLD
 
 def rmse(x_true,x):
-    RMSE = torch.sqrt(torch.mean((x_true.view(-1,x.shape[1])-x).pow(2)))
+    RMSE = torch.sqrt(torch.mean((x_true.reshape(-1)-x.view(-1)).pow(2)))
     return RMSE
 
 ## function definitions
@@ -220,7 +275,7 @@ def optimize_saved(model,N,root_dir,optimizer,batchsize=20,clip=1,smooth_display
                 x_tensor = samp['image'][:,2].to(device)
                 #y_tensor = samp['solution'].to(device)
                 optimizer.zero_grad()
-                x, mu, logvar, log_var_final = model.forward(x_tensor)
+                x, mu, logvar, coupling, log_var_final = model.forward(x_tensor)
                 l = loss(x_tensor,x,mu,logvar,log_var_final,alpha = alpha)
                 l.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), clip)
@@ -271,7 +326,7 @@ def evaluate(model,root_dir,batchsize=20, device='cpu',alpha=1):
             for i,samp in enumerate(dataload):
                 x_tensor = samp['image'].to(device)
                 #y_tensor = samp['solution'].to(device)
-                x, mu, logvar, log_var_final = model.forward(x_tensor)
+                x, mu, logvar, coupling, log_var_final = model.forward(x_tensor)
                 l = loss(x_tensor,x,mu,logvar,log_var_final,alpha=1)
                 MSE = loss_MSE(x_tensor,x,log_var_final.exp())/x.shape[0]
                 KLD = loss_KLD(logvar,mu)/x.shape[0]
@@ -301,7 +356,7 @@ def show(model,root_dir,n_image=5):
     dataload = DataLoader(d,batch_size=n_image,shuffle=False,num_workers=1)
     samp = next(iter(dataload))
     x_true = samp['image'][:,2]
-    x, mu, logvar, log_var_final = model(x_true)
+    x, mu, logvar, coupling, log_var_final = model(x_true)
     x = x.reshape(-1,5,5)
     x_reconstruct = model.decode(mu)
     x_reconstruct = x_reconstruct.reshape(-1,5,5)
@@ -309,7 +364,7 @@ def show(model,root_dir,n_image=5):
     plt.figure(figsize=(2.5,5))
     for i_image in range(n_image):
         plt.subplot(n_image,3,3*i_image+1)
-        plt.imshow(x_true[i_image],cmap=plt.gray())
+        plt.imshow(x_true[i_image],cmap=plt.gray(),clim=[-1,1])
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
             which='both',      # both major and minor ticks are affected
@@ -324,7 +379,7 @@ def show(model,root_dir,n_image=5):
             labelleft=False)
         
         plt.subplot(n_image,3,3*i_image+2)
-        plt.imshow(x_reconstruct[i_image].detach().cpu().numpy(),cmap=plt.gray())
+        plt.imshow(x_reconstruct[i_image].detach().cpu().numpy(),cmap=plt.gray(),clim=[-1,1])
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
             which='both',      # both major and minor ticks are affected
@@ -341,7 +396,7 @@ def show(model,root_dir,n_image=5):
             plt.title('reconstructed')
         
         plt.subplot(n_image,3,3*i_image+3)
-        plt.imshow(x[i_image].detach().cpu().numpy(),cmap=plt.gray())
+        plt.imshow(x[i_image].detach().cpu().numpy(),cmap=plt.gray(),clim=[-1,1])
         plt.tick_params(
             axis='x',          # changes apply to the x-axis
             which='both',      # both major and minor ticks are affected
@@ -359,11 +414,11 @@ def show(model,root_dir,n_image=5):
     plt.tight_layout(pad=0.1)
     plt.figure(figsize=(7.5,2.5))
     plt.subplot(1,2,1)
-    plt.plot(mu.detach().numpy().T,'k')
+    plt.plot(mu.reshape(n_image,-1).detach().numpy().T,'k')
     plt.ylabel('Mean')
     plt.xlabel('z-dimension')
     plt.subplot(1,2,2)
-    plt.plot(logvar.detach().numpy().T,'k')
+    plt.plot(logvar.reshape(n_image,-1).detach().numpy().T,'k')
     plt.ylabel('log Variance')
     plt.xlabel('z-dimension')
     plt.tight_layout()
@@ -375,6 +430,8 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
         model = basic(n_neurons).to(device)
     elif model_name == 'min':
         model = minimal(n_neurons).to(device)
+    elif model_name == 'min_gibbs':
+        model = minimal_gibbs(n_neurons).to(device)
     if not n_neurons==10:
         filename = filename + '_nn%02d' % n_neurons
     if not kernel==3:
@@ -420,7 +477,7 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
     elif action == 'print':
         print(filename)
         if os.path.isfile(path_l):
-            print('negative log-likelihood:')
+            print('total loss:')
             print(np.mean(np.load(path_l)))
             print('RMSE:')
             print(np.mean(np.load(path_acc),axis=0))
@@ -428,6 +485,8 @@ def main(model_name,action,average_neighbors=False,device='cpu',weight_decay = 1
             print(np.mean(np.load(path_MSE),axis=0))
             print('KLD-loss:')
             print(np.mean(np.load(path_KLD),axis=0))
+            print('sigma estimate:')
+            print(np.exp(0.5*model.log_var_final.detach().numpy()))
         else:
             print('not yet evaluated!')
     elif action == 'show':
@@ -453,7 +512,7 @@ if __name__ == '__main__':
     parser.add_argument("-a","--alpha",type=float,help="weight for the KL divergence",default=1)
     parser.add_argument("--kernel",type=int,help="kernel size",default=3)
     parser.add_argument("action",help="what to do? [train,eval,overtrain,print,reset,show]", choices=['train', 'eval', 'overtrain', 'print', 'reset', 'show'])
-    parser.add_argument("model_name",help="model to be trained [min,basic]", choices=['min','basic'])
+    parser.add_argument("model_name",help="model to be trained [min,basic]", choices=['min','basic','min_gibbs'])
     args=parser.parse_args()
     main(args.model_name,args.action,device=args.device,weight_decay=float(args.weight_decay),epochs=args.epochs,
          lr = args.learning_rate,kMax=args.kMax,batchsize=args.batch_size,time=args.time,n_neurons=args.n_neurons,kernel=args.kernel,alpha=args.alpha)
