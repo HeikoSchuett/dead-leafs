@@ -651,7 +651,7 @@ def get_optimal_model(check_dir, model_name, im_size, time, n_neurons,
         val_name = check_dir + '_'.join(val_name.name.split('_')[:-1])
         val_acc = np.mean(np.load(val_name + '_acc.npy'))
         val_loss = np.mean(np.load(val_name + '_l.npy'))
-        model.load_state_dict(torch.load(val_name + '.pt'))
+        model.load_state_dict(torch.load(val_name + '.pt',map_location=torch.device('cpu')))
     return model, val_acc, val_loss
 
 
@@ -839,8 +839,8 @@ def main(model_name, action, average_neighbors=False,
         os.remove(path_l)
         os.remove(path_acc)
     if os.path.isfile(path):
-        model.load_state_dict(torch.load(path))
-        optimizer.load_state_dict(torch.load(path_opt))
+        model.load_state_dict(torch.load(path,map_location=torch.device('cpu')))
+        optimizer.load_state_dict(torch.load(path_opt,map_location=torch.device('cpu')))
         optimizer.param_groups[0]['lr'] = lr
     if action == 'train':
         optimize_saved(model, epochs, data_folder, optimizer,
