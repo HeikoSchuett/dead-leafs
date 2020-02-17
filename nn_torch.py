@@ -661,9 +661,9 @@ def calc_results(check_dir='/Users/heiko/deadrects/check_points/',
                  test_dir = '/Users/heiko/deadrects/test_%d/',
                  model_name='B', time=5, n_neurons=10, kernel=3,
                  average=False, device='cpu'):
-    results = np.zeros((3,6,2))
+    results = np.zeros((3,5,2))
     k = 0
-    for im_size in [3,5,10,30,100,300]:
+    for im_size in [3,5,10,30,100]:
         print("started model '%s', imsize=%d\n" % (model_name,im_size))
         train_dir_i = train_dir % im_size
         val_dir_i = val_dir % im_size
@@ -701,7 +701,7 @@ def save_results(check_dir='/Users/heiko/deadrects/check_points/',
     else:
         res_file_name = ('/Users/heiko/deadrects/results_t%d_nn%02d_k%d.npy'
                          % (time, n_neurons, kernel))
-    results = np.zeros((4,3,6,2))
+    results = np.zeros((4,3,5,2))
     results[0] = calc_results(check_dir=check_dir, train_dir=train_dir,
                               val_dir=val_dir, test_dir=test_dir, time=time,
                               n_neurons=n_neurons, kernel=kernel,
@@ -733,12 +733,14 @@ def plot_results(time=5, n_neurons=10, kernel=3, average=False):
         res_file_name = ('/Users/heiko/deadrects/results_t%d_nn%02d_k%d.npy'
                          % (time, n_neurons, kernel))
     results = np.load(res_file_name)
+    plt.rc('xtick',labelsize=18)
+    plt.rc('ytick',labelsize=18)
     plt.figure()
     for i in range(4):
         plt.subplot(2,2,i+1)
         plt.plot(results[i,:,:,0].T)
         plt.ylabel('Loss')
-        plt.xticks(range(6),[3,5,10,30,100,300])
+        plt.xticks(range(5),[3,5,10,30,100])
         plt.xlabel('Image size [px]')
         if i == 0:
             plt.title('B')
@@ -751,9 +753,9 @@ def plot_results(time=5, n_neurons=10, kernel=3, average=False):
     plt.figure()
     for i in range(4):
         plt.subplot(2,2,i+1)
-        plt.plot(results[0,:,:,1].T)
+        plt.plot(results[i,:,:,1].T)
         plt.ylabel('Accuracy')
-        plt.xticks(range(6),[3,5,10,30,100,300])
+        plt.xticks(range(5),[3,5,10,30,100])
         plt.xlabel('Image size [px]')
         plt.ylim([.5,1])
         if i == 0:
@@ -764,7 +766,40 @@ def plot_results(time=5, n_neurons=10, kernel=3, average=False):
             plt.title('BT')
         elif i == 3:
             plt.title('BLT')
+    fig = plt.figure(figsize=[9,6])
+    ax = fig.add_subplot(1, 1, 1)
+    plt.plot(results[:,2,:,1].T, 's-', linewidth=2)
+    res_human = load_validation_results()
+    plt.plot(res_human[:,0]/res_human[:,1],'ks-', linewidth=2)
+    plt.ylabel('Accuracy', fontsize=18)
+    plt.xticks(range(5),[3,5,10,30,100])
+    plt.xlabel('Image size [px]', fontsize=18)
+    plt.ylim([.5,1])
+    if average:
+        plt.title('Average: Nn=%d' % (n_neurons), fontsize=24)
+    else:
+        plt.title('Linear: Nn=%d' % (n_neurons))
+    leg = plt.legend(['B','BL','BT','BLT', 'Human'], frameon=False, loc='lower center',
+                     fontsize=16)
+    ax.spines['right'].set_visible(False)
+    ax.spines['top'].set_visible(False)
+    fig.savefig('Figures/BLT_comparison.pdf')
     
+
+def load_validation_results():
+    k = 0
+    results = np.zeros((5,2))
+    for im_size in [3,5,10,30,100]:
+        filename = 'result_%d_' % im_size
+        res_list = []
+        for p in pathlib.Path('Experiment/resultsValidation/Heiko/').glob(filename+'*.npy'):
+            res = np.load(p)
+            res_list.append(res)
+        res_all = np.concatenate(res_list, axis=0)
+        results[k] = [np.sum(res_all[:,2]==res_all[:,3]),res_all.shape[0]]
+        k += 1
+    return results
+
 
 def get_model(model_name, im_size, time, n_neurons, kernel, average, device):
     if model_name == 'model':

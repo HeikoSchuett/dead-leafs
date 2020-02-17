@@ -52,7 +52,7 @@ exponents = exponents[np.random.permutation(len(exponents))]
 
 #sizes = 5*np.arange(2,80,dtype='float')
 #prob = (sizes/np.min(sizes)) **-1.5
-#imSize = np.array([800,800])
+#im_size = np.array([800,800])
 
 #Sizes chosen for horizontal:
 #3 0.8972123464097765
@@ -70,7 +70,7 @@ exponents = exponents[np.random.permutation(len(exponents))]
 #distancesd = [2,5,11,28,62]
 
 sizes = 5*np.arange(1,80,dtype='float')
-imSize = np.array([300,300])
+im_size = np.array([300,300])
 factorSize = 3
 
 
@@ -114,7 +114,7 @@ def Trial(window,clock,distance=5,num_colors=9,border=False,angle=0,abs_angle=0,
     rect_name = im_folder + 'rect%d_%d_%d_%d_%d_%d_%d.npy' % (exponent,num_colors,distance,angle,abs_angle,imageNumber,int(border))
     t0 = window.flip()
     CenterImage = visual.ImageStim(window)
-    im_pil = image.resize(factorSize*np.array(imSize))
+    im_pil = image.resize(factorSize*np.array(im_size))
     CenterImage.setImage(im_pil)
     CenterImage.draw(window)
     t1 = window.flip()
@@ -154,7 +154,7 @@ def draw_pos_marker_dot(window,pos,lw=5):
     
 def run_movie(window,nCol,duration=500,fperRect=1,exponent = 3,border=False): 
     prob = (sizes/np.min(sizes)) ** -(exponent/2)
-    dl_mov=dl.dlMovie(imSize=imSize,
+    dl_mov=dl.dlMovie(im_size=im_size,
           sizes=sizes,
           prob = prob,
           grid=1,
@@ -172,7 +172,7 @@ def run_movie(window,nCol,duration=500,fperRect=1,exponent = 3,border=False):
         im[0,np.isnan(im[0])]= 0
         im = np.uint8(255*im.transpose((1,2,0)))
         im_pil = PIL.Image.fromarray(im) #.convert('RGB')
-        im_pil = im_pil.resize(factorSize*np.array(imSize))
+        im_pil = im_pil.resize(factorSize*np.array(im_size))
         stim.setImage(im_pil)
         stim.draw(window)
         for j in range(fperRect-1):

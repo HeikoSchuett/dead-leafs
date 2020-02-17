@@ -12,6 +12,7 @@ import tqdm
 import pandas as pd
 from skimage import io
 import os
+import cv2
 
 default_sizes = 5*np.arange(1,80,dtype='float')
 default_colors_1 = np.linspace(0,1,9)
@@ -398,6 +399,25 @@ class dlMovie:
                 self.image[int(max(idx_x,0)):int(max(0,idx_x+sizx)),int(idx_y+sizy)-1] = 5
     def get_image(self):
         return self.image
+    def save_video(self, filename, n_frame):
+        out = cv2.VideoWriter()
+        out.open(filename, cv2.VideoWriter_fourcc(*"MJPG"), 20, (self.im_size[0],self.im_size[1]))
+        for i in range(n_frame):
+            im = self.get_image()
+            im2 = np.repeat(im.reshape(1,self.im_size[0],self.im_size[1]),3,0)
+            im2[2][np.isnan(im)] = 0
+            im2[1][np.isnan(im)] = 0
+            im2[0][np.isnan(im)] = 1
+            im2[2][im==5] = 1
+            im2[1][im==5] = 0.5
+            im2[0][im==5] = 0.5
+            im2 = 255 * im2
+            im2 = im2.transpose(2,1,0)
+            im2 = im2.astype('uint8')
+            out.write(im2)
+            self.add_leaf()
+        out.release()
+        
 
 class node:
     def __init__(self):

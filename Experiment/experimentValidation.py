@@ -13,6 +13,7 @@ import PIL
 import pickle
 import os
 import pandas as pd
+from scipy.ndimage import convolve1d as conv
 
 # This is the only way I found to do this. It looks like a HORRIBLE IDEA
 # but unfortunately it works so far.
@@ -68,6 +69,11 @@ event.clearEvents()
 def Trial(window,clock,imageNumber=0): 
     im_name = im_folder + 'image%07d.png' % imageNumber
     image = PIL.Image.open(im_name)
+    if im_size == 300:
+        im = np.array(image)
+        im[:,:,0] = conv(im[:,:,0],np.ones(3),axis=0)
+        im[:,:,0] = conv(im[:,:,0],np.ones(3),axis=1)
+        image = PIL.Image.fromarray(im)
     t0 = window.flip()
     CenterImage = visual.ImageStim(window)
     im_pil = image.resize(display_size)
