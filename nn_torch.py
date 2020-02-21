@@ -401,7 +401,7 @@ class model_pred_like(nn.Module):
 class dead_leaves_dataset(Dataset):
     """dead leaves dataset."""
 
-    def __init__(self, root_dir, transformation=None):
+    def __init__(self, root_dir, transform=None, n_data=None, repeats=1):
         """
         Args:
             root_dir (string): Directory with all the images.
@@ -411,12 +411,19 @@ class dead_leaves_dataset(Dataset):
         self.solutions_df = pd.read_csv(os.path.join(root_dir, 'solution.csv'),
                                         index_col=0)
         self.root_dir = root_dir
-        self.transform = transformation
+        self.transform = transform
+        if n_data is None:
+            self.n_data = np.log10(len(self.solutions_df))
+        else:
+            self.n_data = min(n_data, np.log10(len(self.solutions_df)))
+            self.solutions_df = self.solutions_df[:(10**n_data)]
+        self.repeats = repeats
 
     def __len__(self):
-        return len(self.solutions_df)
+        return int(10**self.n_data) * self.repeats
 
     def __getitem__(self, idx):
+        idx = idx % len(self.solutions_df)
         img_name = os.path.join(self.root_dir,
                                 self.solutions_df['im_name'].iloc[idx])
         image = io.imread(img_name).astype(np.float32)
@@ -478,8 +485,8 @@ def optimize(model, N, lr=0.01, Nkeep=100, momentum=0, clip=np.inf,
 def optimize_saved(model, N, root_dir, optimizer,
                    batchsize=20, clip=np.inf, smooth_display=0.9,
                    loss_file=None, tMax=np.inf, smooth_l=0, device='cpu',
-                   val_dir=None, check_dir=None, filename=None):
-    d = dead_leaves_dataset(root_dir)
+                   val_dir=None, check_dir=None, filename=None, n_data=6):
+    d = dead_leaves_dataset(root_dir, n_data=n_data, repeats=10**(6-n_data))
     dataload = DataLoader(d, batch_size=batchsize,
                           shuffle=True, num_workers=20)
     print('starting optimization\n')
@@ -605,7 +612,7 @@ def plot_loss(check_dir, filename, path_loss, smooth_n=25):
     val_loss = []
     val_acc = []
     timestamp = []
-    for p in pathlib.Path(check_dir).glob(filename+'_[0-9]*_[0-9]*_'+'l.npy'):
+    for p in pathlib.Path(check_dir).glob(filename+'_[0-9]*_[0-9]*_l.npy'):
         val_loss.append(np.mean(np.load(p)))
         timestamp.append(int(p.name.split('_')[-3])*1000000
                          + int(p.name.split('_')[-2]))
@@ -613,7 +620,7 @@ def plot_loss(check_dir, filename, path_loss, smooth_n=25):
     val_loss = np.array(val_loss)[order]
     timestamp = []
     check_path = pathlib.Path(check_dir)
-    for p in check_path.glob(filename+'_[0-9]*_[0-9]*_'+'acc.npy'):
+    for p in check_path.glob(filename+'_[0-9]*_[0-9]*_acc.npy'):
         val_acc.append(np.mean(np.load(p)))
         timestamp.append(int(p.name.split('_')[-3])*1000000
                          + int(p.name.split('_')[-2]))
@@ -833,7 +840,7 @@ def get_model(model_name, im_size, time, n_neurons, kernel, average, device):
     return model
 
 
-def get_filename(model_name, im_size, n_neurons, kernel, time, average):
+def get_filename(model_name, im_size, n_neurons, kernel, time, average, n_data):
     filename = 'model_%d_%s' % (im_size, model_name)
     if not n_neurons == 10:
         filename = filename + '_nn%02d' % n_neurons
@@ -841,6 +848,8 @@ def get_filename(model_name, im_size, n_neurons, kernel, time, average):
         filename = filename + '_k%02d' % kernel
     if not time == 5:
         filename = filename + '_%02d' % time
+    if not n_data == 6:
+        filename = filename + '_d%02d' % n_data
     if average:
         filename = filename + '_avg'
     return filename
@@ -849,11 +858,11 @@ def get_filename(model_name, im_size, n_neurons, kernel, time, average):
 def main(model_name, action, average_neighbors=False,
          device='cpu', weight_decay=10**-3, epochs=1, lr=0.001,
          tMax=np.inf, batchsize=20, time=5, n_neurons=10,
-         kernel=3, im_size=5, average=False):
+         kernel=3, im_size=5, average=False, n_data=6):
     model = get_model(model_name, im_size, time, n_neurons,
                       kernel, average, device)
     filename = get_filename(model_name, im_size, n_neurons, kernel, time,
-                            average)
+                            average, n_data)
     check_dir = '/Users/heiko/deadrects/check_points/'
     data_folder = '/Users/heiko/deadrects/training_%d/' % im_size
     val_dir = '/Users/heiko/deadrects/validation_%d/' % im_size
@@ -881,7 +890,8 @@ def main(model_name, action, average_neighbors=False,
         optimize_saved(model, epochs, data_folder, optimizer,
                        batchsize=batchsize, clip=np.inf, smooth_display=0.9,
                        loss_file=path_loss, tMax=tMax, device=device,
-                       check_dir=check_dir, val_dir=val_dir, filename=filename)
+                       check_dir=check_dir, val_dir=val_dir, filename=filename,
+                       n_data=n_data)
         torch.save(model.state_dict(), path)
         torch.save(optimizer.state_dict(), path_opt)
         return model
@@ -945,6 +955,9 @@ if __name__ == '__main__':
     parser.add_argument("-k", "--kernel",
                         help="kernel size",
                         type=int, default=3)
+    parser.add_argument("-a", "--n_data",
+                        help="log10 number of samples used for training [1-6]",
+                        type=int, default=6)
     parser.add_argument('--average', dest='average', action='store_true')
     parser.add_argument("action",
                         help="what to do? [train, eval, overtrain, print"
@@ -962,4 +975,4 @@ if __name__ == '__main__':
          weight_decay=float(args.weight_decay), epochs=args.epochs,
          lr=args.learning_rate, tMax=args.tMax, batchsize=args.batch_size,
          time=args.time, n_neurons=args.n_neurons, kernel=args.kernel,
-         im_size=args.im_size, average=args.average)
+         im_size=args.im_size, average=args.average, n_data=args.n_data)
