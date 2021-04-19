@@ -20,7 +20,7 @@ default_colors_255 = np.array([0,  31,  63,  95, 127, 159, 191, 223, 255], dtype
 
 
 def get_default_prob(exponent, sizes=default_sizes):
-    return (sizes/np.min(sizes)) ** -(exponent / 2)
+    return (sizes / np.min(sizes)) ** -(exponent / 2)
 
 
 def gen_rect_leaf(im_size=[255, 255], sizes=[5, 10, 15],

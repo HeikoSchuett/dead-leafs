@@ -17,113 +17,148 @@ eps = np.finfo(float).eps
 
 def segment(compatibility, start, scale=1):
     compatibility = compatibility * scale
-    segmentation = 0.5 * np.ones((compatibility.shape[1], compatibility.shape[2]))
+    segmentation = 0.5 * np.ones((compatibility.shape[1],
+                                  compatibility.shape[2]))
     segmentation[start[0], start[1]] = 1
     for k in range(5):
         for i in range(compatibility.shape[1]):
             for j in range(compatibility.shape[2]):
-                if not (i==start[0] and j==start[1]):
-                    p = np.array([0.,0])
-                    if i < (compatibility.shape[1]-1):
-                        p0 = compatibility[0, i, j] * (segmentation[i + 1, j] * np.array([1, 0])
-                              + (1-segmentation[i + 1, j]) * np.array([-1, 0]))
+                if not (i == start[0] and j == start[1]):
+                    p = np.array([0., 0])
+                    if i < (compatibility.shape[1] - 1):
+                        p0 = compatibility[0, i, j] \
+                            * (segmentation[i + 1, j] * np.array([1, 0])
+                               + (1 - segmentation[i + 1, j])
+                               * np.array([-1, 0]))
                         p += p0
                     if i > 0:
-                        p1 = compatibility[1, i, j] * (segmentation[i - 1, j] * np.array([1, 0])
-                              + (1-segmentation[i - 1, j]) * np.array([-1, 0]))
+                        p1 = compatibility[1, i, j] \
+                            * (segmentation[i - 1, j] * np.array([1, 0])
+                               + (1-segmentation[i - 1, j])
+                               * np.array([-1, 0]))
                         p += p1
                     if j < (compatibility.shape[2]-1):
-                        p2 = compatibility[2, i, j] * (segmentation[i, j + 1] * np.array([1, 0])
-                              + (1-segmentation[i, j + 1]) * np.array([0, 1]))
+                        p2 = compatibility[2, i, j] \
+                            * (segmentation[i, j + 1] * np.array([1, 0])
+                               + (1 - segmentation[i, j + 1])
+                               * np.array([0, 1]))
                         p += p2
                     if j > 0:
-                        p3 = compatibility[3, i, j] * (segmentation[i, j - 1] * np.array([1, 0])
-                              + (1-segmentation[i, j - 1]) * np.array([0, 1]))
+                        p3 = compatibility[3, i, j] \
+                            * (segmentation[i, j - 1] * np.array([1, 0])
+                               + (1-segmentation[i, j - 1]) * np.array([0, 1]))
                         p += p3
                     segmentation[i, j] = np.exp(p[0]) / np.sum(np.exp(p))
         plt.imshow(segmentation)
         plt.colorbar()
         plt.show()
-        for i in range(compatibility.shape[1]-1,-1,-1):
-            for j in range(compatibility.shape[2]-1,-1,-1):
-                if not (i==start[0] and j==start[1]):
-                    p = np.array([0.,0.])
+        for i in range(compatibility.shape[1] - 1, -1, -1):
+            for j in range(compatibility.shape[2] - 1, -1, -1):
+                if not (i == start[0] and j == start[1]):
+                    p = np.array([0., 0.])
                     if i < (compatibility.shape[1]-1):
-                        p0 = compatibility[0, i, j] * (segmentation[i + 1, j] * np.array([1, 0])
-                              + (1-segmentation[i + 1, j]) * np.array([-1, 0]))
+                        p0 = compatibility[0, i, j] \
+                            * (segmentation[i + 1, j] * np.array([1, 0])
+                               + (1 - segmentation[i + 1, j])
+                               * np.array([-1, 0]))
                         p += p0
                     if i > 0:
-                        p1 = compatibility[1, i, j] * (segmentation[i - 1, j] * np.array([1, 0])
-                              + (1-segmentation[i - 1, j]) * np.array([-1, 0]))
+                        p1 = compatibility[1, i, j] \
+                            * (segmentation[i - 1, j] * np.array([1, 0])
+                               + (1 - segmentation[i - 1, j])
+                               * np.array([-1, 0]))
                         p += p1
-                    if j < (compatibility.shape[2]-1):
-                        p2 = compatibility[2, i, j] * (segmentation[i, j + 1] * np.array([1, 0])
-                              + (1-segmentation[i, j + 1]) * np.array([0, 1]))
+                    if j < (compatibility.shape[2] - 1):
+                        p2 = compatibility[2, i, j] \
+                            * (segmentation[i, j + 1] * np.array([1, 0])
+                               + (1 - segmentation[i, j + 1])
+                               * np.array([0, 1]))
                         p += p2
                     if j > 0:
-                        p3 = compatibility[3, i, j] * (segmentation[i, j - 1] * np.array([1, 0])
-                              + (1-segmentation[i, j - 1]) * np.array([0, 1]))
+                        p3 = compatibility[3, i, j] \
+                            * (segmentation[i, j - 1] * np.array([1, 0])
+                               + (1 - segmentation[i, j - 1])
+                               * np.array([0, 1]))
                         p += p3
                     segmentation[i, j] = np.exp(p[0]) / np.sum(np.exp(p))
         plt.imshow(segmentation)
         plt.colorbar()
         plt.show()
     return segmentation
-            
 
-def segment_EP(compatibility, start, scale=1, steps = 5, segment_start=0.499):
+
+def segment_EP(compatibility, start, scale=1, steps=5, segment_start=0.499):
     compatibility = compatibility * scale
-    segmentation = segment_start * np.ones((compatibility.shape[1], compatibility.shape[2]))
+    segmentation = segment_start * np.ones((compatibility.shape[1],
+                                            compatibility.shape[2]))
     segmentation[start[0], start[1]] = 1
     for k in range(steps):
         for i in range(compatibility.shape[1]):
             for j in range(compatibility.shape[2]):
-                if not (i==start[0] and j==start[1]):
-                    p = np.ones((2,2,2,2,2))
-                    p = p * np.array([1,2]).reshape((2,1,1,1,1))
-                    if i < (compatibility.shape[1]-1):
-                        p0 = np.exp(0.5* compatibility[0, i, j] * np.array([[1,-1],[-1,1]]))
-                        fac_old = p0 * [[segmentation[i, j]],[1-segmentation[i, j]]]
+                if not (i == start[0] and j == start[1]):
+                    p = np.ones((2, 2, 2, 2, 2))
+                    p = p * np.array([1, 2]).reshape((2, 1, 1, 1, 1))
+                    if i < (compatibility.shape[1] - 1):
+                        p0 = np.exp(0.5 * compatibility[0, i, j]
+                                    * np.array([[1, -1], [-1, 1]]))
+                        fac_old = p0 * [[segmentation[i, j]],
+                                        [1 - segmentation[i, j]]]
                         p0 = p0 / np.sum(fac_old, axis=0, keepdims=True)
-                        p0 = p0 * np.array([[segmentation[i + 1, j], 1 - segmentation[i + 1, j]]])
-                        p0 = p0.reshape((2,2,1,1,1))
+                        p0 = p0 * np.array([[segmentation[i + 1, j],
+                                             1 - segmentation[i + 1, j]]])
+                        p0 = p0.reshape((2, 2, 1, 1, 1))
                         p = p * p0
                     if i > 0:
-                        p0 = np.exp(0.5* compatibility[1, i, j] * np.array([[1,-1],[-1,1]]))
-                        fac_old = p0 * [[segmentation[i, j]],[1-segmentation[i, j]]]
+                        p0 = np.exp(0.5 * compatibility[1, i, j]
+                                    * np.array([[1, -1], [-1, 1]]))
+                        fac_old = p0 * [[segmentation[i, j]],
+                                        [1 - segmentation[i, j]]]
                         p0 /= np.sum(fac_old, axis=0, keepdims=True)
-                        p0 *= np.array([[segmentation[i - 1, j], 1 - segmentation[i - 1, j]]])
-                        p0 = p0.reshape((2,1,2,1,1))
+                        p0 *= np.array([[segmentation[i - 1, j],
+                                         1 - segmentation[i - 1, j]]])
+                        p0 = p0.reshape((2, 1, 2, 1, 1))
                         p = p * p0
-                    if j < (compatibility.shape[2]-1):
-                        p0 = np.exp(0.5* compatibility[2, i, j] * np.array([[1,-1],[-1,1]]))
-                        fac_old = p0 * [[segmentation[i, j]],[1-segmentation[i, j]]]
+                    if j < (compatibility.shape[2] - 1):
+                        p0 = np.exp(0.5 * compatibility[2, i, j]
+                                    * np.array([[1, -1], [-1, 1]]))
+                        fac_old = p0 * [[segmentation[i, j]],
+                                        [1 - segmentation[i, j]]]
                         p0 /= np.sum(fac_old, axis=0, keepdims=True)
-                        p0 *= np.array([[segmentation[i, j + 1], 1 - segmentation[i, j + 1]]])
-                        p0 = p0.reshape((2,1,1,2,1))
+                        p0 *= np.array([[segmentation[i, j + 1],
+                                         1 - segmentation[i, j + 1]]])
+                        p0 = p0.reshape((2, 1, 1, 2, 1))
                         p = p * p0
                     if j > 0:
-                        p0 = np.exp(0.5* compatibility[3, i, j] * np.array([[1,-1],[-1,1]]))
-                        fac_old = p0 * [[segmentation[i, j]],[1-segmentation[i, j]]]
+                        p0 = np.exp(0.5 * compatibility[3, i, j]
+                                    * np.array([[1, -1], [-1, 1]]))
+                        fac_old = p0 * [[segmentation[i, j]],
+                                        [1 - segmentation[i, j]]]
                         p0 /= np.sum(fac_old, axis=0, keepdims=True)
-                        p0 *= np.array([[segmentation[i, j - 1], 1 - segmentation[i, j - 1]]])
-                        p0 = p0.reshape((2,1,1,1,2))
+                        p0 *= np.array([[segmentation[i, j - 1],
+                                         1 - segmentation[i, j - 1]]])
+                        p0 = p0.reshape((2, 1, 1, 1, 2))
                         p = p * p0
-                    segmentation[i, j] = np.sum(np.sum(np.sum(np.sum(p,axis=4),axis=3),axis=2),axis=1)[0]/np.sum(p)
-        for i in range(compatibility.shape[1]-1,-1,-1):
-            for j in range(compatibility.shape[2]-1,-1,-1):
-                if not (i==start[0] and j==start[1]):
-                    p = np.ones((2,2,2,2,2))
+                    segmentation[i, j] = np.sum(np.sum(np.sum(np.sum(
+                        p, axis=4), axis=3), axis=2), axis=1)[0] / np.sum(p)
+        for i in range(compatibility.shape[1] - 1, -1, -1):
+            for j in range(compatibility.shape[2] - 1, -1, -1):
+                if not (i == start[0] and j == start[1]):
+                    p = np.ones((2, 2, 2, 2, 2))
                     if i < (compatibility.shape[1]-1):
-                        p0 = np.exp(0.5* compatibility[0, i, j] * np.array([[1,-1],[-1,1]]))
-                        fac_old = p0 * [[segmentation[i, j]],[1-segmentation[i, j]]]
+                        p0 = np.exp(0.5 * compatibility[0, i, j]
+                                    * np.array([[1, -1], [-1, 1]]))
+                        fac_old = p0 * [[segmentation[i, j]],
+                                        [1 - segmentation[i, j]]]
                         p0 /= np.sum(fac_old, axis=0, keepdims=True)
-                        p0 *= np.array([[segmentation[i + 1, j], 1 - segmentation[i + 1, j]]])
-                        p0 = p0.reshape((2,2,1,1,1))
+                        p0 *= np.array([[segmentation[i + 1, j],
+                                         1 - segmentation[i + 1, j]]])
+                        p0 = p0.reshape((2, 2, 1, 1, 1))
                         p = p * p0
                     if i > 0:
-                        p0 = np.exp(0.5* compatibility[1, i, j] * np.array([[1,-1],[-1,1]]))
-                        fac_old = p0 * [[segmentation[i, j]],[1-segmentation[i, j]]]
+                        p0 = np.exp(0.5 * compatibility[1, i, j]
+                                    * np.array([[1, -1], [-1, 1]]))
+                        fac_old = p0 * [[segmentation[i, j]],
+                                        [1 - segmentation[i, j]]]
                         p0 /= np.sum(fac_old, axis=0, keepdims=True)
                         p0 *= np.array([[segmentation[i - 1, j], 1 - segmentation[i - 1, j]]])
                         p0 = p0.reshape((2,1,2,1,1))
@@ -343,48 +378,57 @@ def segment_sampling_square(compatibility, start, scale=1, steps = 5, segment_st
 
 def get_simple_compatibiliy(image):
     image = image.astype(np.float)
-    im_out = np.zeros([4,image.shape[0],image.shape[1]])
-    im_out[0] = conv(image,[0, 1, -1], axis=0, cval=-1, origin=1, mode='constant')
-    im_out[1] = conv(image,[1, -1, 0], axis=0, cval=-1, origin=-1, mode='constant')
-    im_out[2] = conv(image,[0, 1, -1], axis=1, cval=-1, origin=1, mode='constant')
-    im_out[3] = conv(image,[1, -1, 0], axis=1, cval=-1, origin=-1, mode='constant')
+    im_out = np.zeros([4, image.shape[0], image.shape[1]])
+    im_out[0] = conv(image, [0, 1, -1], axis=0, cval=-1,
+                     origin=1, mode='constant')
+    im_out[1] = conv(image, [1, -1, 0], axis=0, cval=-1,
+                     origin=-1, mode='constant')
+    im_out[2] = conv(image, [0, 1, -1], axis=1, cval=-1,
+                     origin=1, mode='constant')
+    im_out[3] = conv(image, [1, -1, 0], axis=1, cval=-1,
+                     origin=-1, mode='constant')
     im_out = (abs(im_out) > 0).astype(np.float)
-    im_out = 1-im_out
-    return im_out    
+    im_out = 1 - im_out
+    return im_out
 
 
 def graph_spectral_clustering(compatibility):
     from sklearn.cluster import KMeans
     n = compatibility.shape[1] * compatibility.shape[2]
-    laplacian = np.zeros((n,n))
+    laplacian = np.zeros((n, n))
     for i in range(compatibility.shape[1]):
         for j in range(compatibility.shape[2]):
             if i < (compatibility.shape[1]-1):
-                laplacian[compatibility.shape[1]*i+j,compatibility.shape[1]*(i+1)+j] += \
-                    compatibility[0,i,j]
+                laplacian[compatibility.shape[1] * i + j,
+                          compatibility.shape[1] * (i + 1) + j] += \
+                    compatibility[0, i, j]
             if i > 0:
-                laplacian[compatibility.shape[1]*i+j,compatibility.shape[1]*(i-1)+j] += \
-                    compatibility[1,i,j]
-            if j < (compatibility.shape[1]-1):
-                laplacian[compatibility.shape[1]*i+j,compatibility.shape[1]*i+j+1] += \
-                    compatibility[2,i,j]
+                laplacian[compatibility.shape[1] * i + j,
+                          compatibility.shape[1] * (i - 1) + j] += \
+                    compatibility[1, i, j]
+            if j < (compatibility.shape[1] - 1):
+                laplacian[compatibility.shape[1] * i + j,
+                          compatibility.shape[1] * i + j + 1] += \
+                    compatibility[2, i, j]
             if j > 0:
-                laplacian[compatibility.shape[1]*i+j,compatibility.shape[1]*i+j-1] += \
-                    compatibility[3,i,j]
-    laplacian = (laplacian + laplacian.T)/2
-    diag = -np.sum(laplacian, axis = 1)
+                laplacian[compatibility.shape[1] * i + j,
+                          compatibility.shape[1] * i + j - 1] += \
+                    compatibility[3, i, j]
+    laplacian = (laplacian + laplacian.T) / 2
+    diag = -np.sum(laplacian, axis=1)
     np.fill_diagonal(laplacian, diag)
     laplacian = laplacian / (diag + eps)
-    w, v = scipy.linalg.eig(laplacian, b = np.diag(-diag+eps))
+    w, v = scipy.linalg.eig(laplacian, b=np.diag(-diag + eps))
     thresh = 10 * eps
-    v_used = v[:,np.abs(w) < thresh]
+    v_used = v[:, np.abs(w) < thresh]
     kmeans = KMeans(n_clusters=v_used.shape[1])
     kmeans.fit(v_used)
     plt.figure()
     plt.plot(np.sort(np.abs(w)))
     plt.show()
-    return kmeans.labels_.reshape((compatibility.shape[1],compatibility.shape[2]))
-    
+    return kmeans.labels_.reshape((compatibility.shape[1],
+                                   compatibility.shape[2]))
+
 def segment_flood(compatibility, start, scale=1, steps = 5, segment_start=0.4):
     compatibility = compatibility * scale
     segmentation = np.zeros((compatibility.shape[1], compatibility.shape[2]))
@@ -418,9 +462,11 @@ def segment_flood(compatibility, start, scale=1, steps = 5, segment_start=0.4):
 
 import PIL.Image
 im = PIL.Image.open('/Users/heiko/deadrects/validation_30/image0000025.png')
-image = np.array(im)[:,:,1]
+image = np.array(im)[:, :, 1]
 compatibility = get_simple_compatibiliy(image)
-compatibility = compatibility + 0.01 * np.random.rand(compatibility.shape[0],compatibility.shape[1],compatibility.shape[2])
+compatibility = compatibility + 0.01 * np.random.rand(compatibility.shape[0],
+                                                      compatibility.shape[1],
+                                                      compatibility.shape[2])
 seg = segment_flood(compatibility, [5,20], steps=100)
 
 if False:
